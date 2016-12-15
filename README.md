@@ -4,10 +4,10 @@
 
 2. Put this `fluent_extractor` code in `ros_ws/src/`. Then run the following:
 
-    $ catkin_make
+        $ catkin_make
 
 3. Edit the `config.json` file located `ros_ws/src/fluent_extractor`.
 
 3. Run the `vision_buffer`
 
-    rosrun fluent_extractor vision_buffer src/fluent_extractor/config.json
+        $ rosrun fluent_extractor vision_buffer src/fluent_extractor/config.json
