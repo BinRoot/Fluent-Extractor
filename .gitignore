@@ -1,14 +1,4 @@
-src/calibration
-src/calibration/*
-data
-src/aog*
-src/icons
+cmake-build-debug
 *~
-src/aog.dot
-src/backup*
-src/best_backup*
 *.pcd
-src/dst.jpg
-src/img.png
-src/keypoints.csv
 .idea

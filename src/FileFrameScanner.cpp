@@ -40,7 +40,7 @@ string FileFrameScanner::skeleton_filename(int idx) {
     return m_skeleton_file_prefix + zero_pad(idx, m_file_num_length) + ".txt";
 }
 
-void FileFrameScanner::get(int idx, cv::Mat& img_bgr, cv::Mat& img_x, cv::Mat& img_y, cv::Mat& img_z, PointT& left_hand, PointT& right_hand) {
+bool FileFrameScanner::get(int idx, cv::Mat& img_bgr, cv::Mat& img_x, cv::Mat& img_y, cv::Mat& img_z, PointT& left_hand, PointT& right_hand) {
     string img_file = rgb_filename(idx);
     string x_file, y_file, z_file;
     xyz_filename(idx, x_file, y_file, z_file);
@@ -53,8 +53,8 @@ void FileFrameScanner::get(int idx, cv::Mat& img_bgr, cv::Mat& img_x, cv::Mat& i
     left_hand = m_left_hand;
     right_hand = m_right_hand;
     if (img_bgr.size().area() == 0) {
-        cout << "ERR: " << img_file << " is malformed" << endl;
-        exit(1);
+        cout << "ERR: " << img_file << " is not found" << endl;
+        return false;
     } else if (img_x.size().area() == 0) {
         cout << "ERR: " << x_file << " is malformed" << endl;
         exit(1);
@@ -65,6 +65,7 @@ void FileFrameScanner::get(int idx, cv::Mat& img_bgr, cv::Mat& img_x, cv::Mat& i
         cout << "ERR: " << z_file << " is malformed" << endl;
         exit(1);
     }
+    return true;
 }
 
 void FileFrameScanner::read_skeleton(string filename) {

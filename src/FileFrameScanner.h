@@ -16,7 +16,7 @@ typedef Cloud::ConstPtr CloudConstPtr;
 class FileFrameScanner {
 public:
     FileFrameScanner(std::string filepath);
-    virtual void get(int idx, cv::Mat& img_bgr, cv::Mat& x, cv::Mat& y, cv::Mat& z, PointT& left_hand, PointT& right_hand);
+    virtual bool get(int idx, cv::Mat& img_bgr, cv::Mat& x, cv::Mat& y, cv::Mat& z, PointT& left_hand, PointT& right_hand);
 private:
     std::string m_rgb_file_prefix;
     std::string m_xyz_file_prefix;
