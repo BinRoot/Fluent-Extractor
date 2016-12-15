@@ -46,7 +46,7 @@ public:
     }
 
     static cv::Mat draw_mask(cv::Mat img, cv::Mat mask, cv::Scalar color) {
-        double color_strength = 0.9;
+        double color_strength = 0.5;
         cv::Mat display = img.clone();
         for (int row = 0; row < img.rows; row++) {
             for (int col = 0; col < img.cols; col++) {
@@ -716,8 +716,11 @@ public:
     }
 
 
-    static bool find_biggest_plane(CloudPtr cloud_ptr, CloudPtr plane_cloud) {
+    static bool find_biggest_plane(CloudPtr cloud_ptr, int* voxel2pixel, cv::Mat& mask) {
         std::cout << "Finding biggest plane in the pointcloud..." << std::endl;
+
+        cv::Size size(cloud_ptr->width, cloud_ptr->height);
+
         pcl::search::Search<PointT>::Ptr tree =
             boost::shared_ptr<pcl::search::Search<PointT> >(new pcl::search::KdTree<PointT>);
         pcl::PointCloud <pcl::Normal>::Ptr normals(new pcl::PointCloud <pcl::Normal>);
@@ -765,10 +768,20 @@ public:
                 std::cout << "No table found" << std::endl;
                 return false;
             } else {
+                std::vector<cv::Point2i> plane_points;
                 for (int i = 0; i < clusters[max_cluster_idx].indices.size(); i++) {
-                    PointT p = cloud_ptr->at(clusters[max_cluster_idx].indices[i]);
-                    plane_cloud->push_back(p);
+                    int row, col;
+                    vox2pix(voxel2pixel, clusters[max_cluster_idx].indices[i], row, col, cloud_ptr->width);
+                    plane_points.push_back(cv::Point2i(col, row));
+//                    PointT p = cloud_ptr->at(clusters[max_cluster_idx].indices[i]);
+//                    plane_cloud->push_back(p);
                 }
+                std::vector<cv::Point2i> hull;
+                cv::convexHull(plane_points, hull, true);
+                std::vector<std::vector<cv::Point2i>> hulls;
+                hulls.push_back(hull);
+                mask = cv::Mat::zeros(size, CV_8U);
+                cv::drawContours(mask, hulls, 0, cv::Scalar(255, 255, 255), -1);
                 return true;
             }
         }
@@ -870,13 +883,12 @@ public:
                     voxel2pixel[cloud_ptr->size()] = img_idx;
                     p.z = z;
                     cloud_ptr->push_back(p);
-                    img_idx++;
-
                 } else {
                     pixel2voxel[img_idx] = -1;
                     p.z = std::numeric_limits<float>::quiet_NaN();
 //                    cloud_ptr->push_back(p);
                 }
+                img_idx++;
                 //std::numeric_limits<float>::quiet_NaN();
             }
         }

@@ -38,19 +38,21 @@ int main(int argc, char **argv) {
   PointT left_hand, right_hand;
   int img_idx = json["start_frame_idx"].GetInt();
 
+  Mat table_mask;
+
   while(scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
     int pixel2voxel[img_bgr.size().area()];
     int voxel2pixel[img_bgr.size().area()];
     CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
 
-    imshow("img", img_bgr);
-
-    CloudPtr table_cloud = CloudPtr(new Cloud);
-    if (CommonTools::find_biggest_plane(cloud_ptr->makeShared(), table_cloud)) {
-      viewer.showCloud(table_cloud);
+    if (table_mask.size().area() == 0) {
+      CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, table_mask);
     }
 
-    waitKey(60);
+    Mat img_with_mask = CommonTools::draw_mask(img_bgr, table_mask, Scalar(0, 0, 255));
+    imshow("img", img_with_mask);
+
+    waitKey(30);
   }
 
   ros::spin();
