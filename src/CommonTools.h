@@ -11,6 +11,9 @@
 #include <pcl/segmentation/region_growing.h>
 #include <pcl/common/distances.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/segmentation/region_growing_rgb.h>
+#include <pcl/segmentation/min_cut_segmentation.h>
 
 #define BOOST_NO_CXX11_SCOPED_ENUMS
 #include <boost/filesystem.hpp>
@@ -715,6 +718,148 @@ public:
         return keypoints_ptr;
     }
 
+  static CloudPtr get_segments_mincut(CloudPtr cloud_ptr) {
+      pcl::search::Search <PointT>::Ptr tree =
+          boost::shared_ptr<pcl::search::Search<PointT> > (new pcl::search::KdTree<PointT>);
+
+      pcl::IndicesPtr indices (new std::vector <int>);
+      pcl::PassThrough<PointT> pass;
+      pass.setInputCloud (cloud_ptr);
+      pass.setFilterFieldName ("z");
+      pass.setFilterLimits (0.0, 1.0);
+      pass.filter (*indices);
+
+      pcl::MinCutSegmentation<PointT> seg;
+      seg.setInputCloud (cloud_ptr);
+      seg.setIndices (indices);
+
+      pcl::PointCloud<PointT>::Ptr foreground_points(new pcl::PointCloud<PointT> ());
+      PointT point;
+      pcl::computeCentroid<PointT, PointT>(*cloud_ptr, point);
+      std::cout << "centroid: " << point << std::endl;
+      foreground_points->points.push_back(point);
+      seg.setForegroundPoints (foreground_points);
+
+      seg.setSigma (0.25);
+      seg.setRadius (3.0433856);
+      seg.setNumberOfNeighbours (14);
+      seg.setSourceWeight (0.8);
+
+      std::vector <pcl::PointIndices> clusters;
+      seg.extract (clusters);
+
+      std::cout << "Maximum flow is " << seg.getMaxFlow () << std::endl;
+
+      pcl::PointCloud <PointT>::Ptr colored_cloud = seg.getColoredCloud ();
+      return colored_cloud;
+  }
+
+    static CloudPtr get_segments_color(CloudPtr cloud_ptr) {
+        pcl::search::Search <PointT>::Ptr tree =
+            boost::shared_ptr<pcl::search::Search<PointT> > (new pcl::search::KdTree<PointT>);
+
+        pcl::IndicesPtr indices (new std::vector <int>);
+        pcl::PassThrough<PointT> pass;
+        pass.setInputCloud (cloud_ptr->makeShared());
+        pass.setFilterFieldName ("z");
+        pass.setFilterLimits (0.0, 1.0);
+        pass.filter (*indices);
+
+        pcl::RegionGrowingRGB<PointT> reg;
+        reg.setInputCloud (cloud_ptr->makeShared());
+        reg.setIndices (indices);
+        reg.setSearchMethod (tree);
+        reg.setDistanceThreshold (10);
+        reg.setPointColorThreshold (6);
+        reg.setRegionColorThreshold (5);
+        reg.setMinClusterSize (600);
+
+        std::vector <pcl::PointIndices> clusters;
+        reg.extract (clusters);
+
+        CloudPtr colored_cloud = reg.getColoredCloud ();
+//        pcl::visualization::CloudViewer viewer ("Cluster viewer");
+//        viewer.showCloud (colored_cloud);
+//        while (!viewer.wasStopped ())
+//        {
+//          boost::this_thread::sleep (boost::posix_time::microseconds (100));
+//        }
+        return colored_cloud;
+    }
+
+    static CloudPtr remove_biggest_plane(CloudPtr cloud_ptr) {
+
+        std::cout << "Finding biggest plane in the pointcloud..." << std::endl;
+        CloudPtr remaining_cloud_ptr = CloudPtr(new Cloud);
+
+        cv::Size size(cloud_ptr->width, cloud_ptr->height);
+
+        pcl::search::Search<PointT>::Ptr tree =
+            boost::shared_ptr<pcl::search::Search<PointT> >(new pcl::search::KdTree<PointT>);
+        pcl::PointCloud <pcl::Normal>::Ptr normals(new pcl::PointCloud <pcl::Normal>);
+        pcl::NormalEstimation<PointT, pcl::Normal> normal_estimator;
+        normal_estimator.setSearchMethod(tree);
+        normal_estimator.setInputCloud(cloud_ptr->makeShared());
+        normal_estimator.setKSearch(50);
+        normal_estimator.compute(*normals);
+
+        pcl::IndicesPtr indices(new std::vector <int>);
+        pcl::PassThrough<PointT> pass;
+        pass.setInputCloud(cloud_ptr->makeShared());
+        pass.setFilterFieldName("z");
+        pass.setFilterLimits(0.0, 1.0);
+        pass.filter(*indices);
+
+        pcl::RegionGrowing<PointT, pcl::Normal> reg;
+        reg.setMinClusterSize(50);
+        reg.setMaxClusterSize(1000000);
+        reg.setSearchMethod(tree);
+        reg.setNumberOfNeighbours(60);
+        reg.setInputCloud(cloud_ptr->makeShared());
+        //reg.setIndices (indices);
+        reg.setInputNormals (normals);
+        reg.setSmoothnessThreshold(3.0 / 180.0 * M_PI);
+        reg.setCurvatureThreshold(1.0);
+
+        std::vector <pcl::PointIndices> clusters;
+        reg.extract (clusters);
+
+        int max_cluster_size = 0;
+        if (clusters.size() > 0) {
+            int max_cluster_idx = -1;
+            for (int cluster_idx = 0; cluster_idx < clusters.size(); cluster_idx++) {
+              // calculate average normal of each cluster, and make sure y is dominant
+              PointT cluster_normal = CommonTools::estimate_normal(clusters[cluster_idx].indices, normals, 20);
+              double y_ratio = fabs(cluster_normal.y) / (fabs(cluster_normal.x) + fabs(cluster_normal.y) + fabs(cluster_normal.z));
+              if (clusters[cluster_idx].indices.size() > max_cluster_size && y_ratio > 0.3) {
+                max_cluster_size = clusters[cluster_idx].indices.size();
+                max_cluster_idx = cluster_idx;
+              }
+            }
+            if (max_cluster_idx < 0) {
+              std::cout << "No table found" << std::endl;
+              return remaining_cloud_ptr;
+            } else {
+              // Add points to the cloud that are not on the plane
+              for (int i, j = 0; i < cloud_ptr->size(); i++) {
+                if (i == clusters[max_cluster_idx].indices[j]) {
+                  j++;
+                } else {
+                  remaining_cloud_ptr->push_back(cloud_ptr->at(i));
+                }
+              }
+            }
+        }
+
+        pcl::StatisticalOutlierRemoval<PointT> sor;
+        sor.setInputCloud(remaining_cloud_ptr);
+        sor.setMeanK(50);
+        sor.setStddevMulThresh(0.01);
+        sor.filter(*remaining_cloud_ptr);
+
+        return remaining_cloud_ptr;
+    }
+
 
     static bool find_biggest_plane(CloudPtr cloud_ptr, int* voxel2pixel, cv::Mat& mask) {
         std::cout << "Finding biggest plane in the pointcloud..." << std::endl;
@@ -826,6 +971,19 @@ public:
         }
 
         return true;
+    }
+
+    static CloudPtr get_pointcloud_from_mask(CloudPtr cloud_ptr, int* pixel2voxel, cv::Mat mask) {
+        CloudPtr mask_cloud_ptr = CloudPtr(new Cloud);
+        for (int i = 0; i < mask.size().area(); i++) {
+            if (mask.at<uchar>(i) == 255) {
+                if (pixel2voxel[i] >= 0) {
+                  PointT p = cloud_ptr->at(pixel2voxel[i]);
+                  mask_cloud_ptr->push_back(p);
+                }
+            }
+        }
+        return mask_cloud_ptr;
     }
 
     static CloudPtr make_cloud_ptr(cv::Mat img_bgr,

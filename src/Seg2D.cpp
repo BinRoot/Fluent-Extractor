@@ -12,6 +12,7 @@ using namespace cv;
 Seg2D::Seg2D() {
 }
 
+// sigma = 0.5, K = 500, min = 50
 Mat Seg2D::seg(Mat& img, double sigma, double k, double minSize) {
     SegmentParams segParams;
     segParams.sigma = sigma;
