@@ -1,0 +1,9 @@
+# The folder includes the FluentCalculator, which provides helper functions to calculate
+  various kinds of fluents from point cloud data
+
+# Setup
+
+1. Install PCL with "apt-get install libpcl-all", install appropriate dependencies if necessary
+2. Run "cmake ." and "make"
+
+# The class shall be integrated into the Fluent_Extractor and will no longer require a stand alone cmake [TO-DO]
