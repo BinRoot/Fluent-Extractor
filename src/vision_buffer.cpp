@@ -11,6 +11,7 @@
 #include <iostream>
 #include "rapidjson/filereadstream.h"
 #include "Seg2D.h"
+
 #include <cstdio>
 
 using namespace std;
@@ -19,6 +20,9 @@ using namespace rapidjson;
 
 int main(int argc, char **argv) {
   ros::init(argc, argv, "vision_buffer");
+
+  ros::NodeHandle node_handle;
+  ros::Publisher pub = node_handle.advertise<Cloud>("vision_buffer_pcl", 1);
 
   // Read the config file
   FILE* fp = fopen(argv[1], "rb");
@@ -33,14 +37,15 @@ int main(int argc, char **argv) {
   vids_directory << json["vid_idx"].GetInt() << "/";
   FileFrameScanner scanner(vids_directory.str());
 
-  pcl::visualization::CloudViewer viewer("Cloud Viewer");
 
   Mat img_bgr, x, y, z;
   PointT left_hand, right_hand;
   int img_idx = json["start_frame_idx"].GetInt();
 
   Mat table_mask;
+  PointT table_midpoint, table_normal;
   Seg2D seg2D;
+  vector<double> cloth_feature(2);
 
   while(scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
     int pixel2voxel[img_bgr.size().area()];
@@ -48,13 +53,31 @@ int main(int argc, char **argv) {
     CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
 
     if (table_mask.size().area() == 0) {
-      CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, table_mask);
+      CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, table_mask, table_midpoint, table_normal);
+      cout << "table midpoint is " << table_midpoint << endl;
+      cout << "table normal is " << table_normal << endl;
     }
 
     Mat cloth_mask;
     if (table_mask.size().area() > 0) {
-//      CloudPtr table_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr->makeShared(), pixel2voxel, table_mask);
+      CloudPtr table_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr->makeShared(), pixel2voxel, table_mask);
 //      viewer.showCloud(table_cloud_ptr);
+
+      // no obstacles allowed
+      double max_dist_from_table = 0;
+      for (int i = 0; i < table_cloud_ptr->size(); i++) {
+        PointT p = table_cloud_ptr->at(i);
+        double d = -table_normal.x * table_midpoint.x -
+                   table_normal.y * table_midpoint.y -
+                   table_normal.z * table_midpoint.z;
+        double dist_from_table = table_normal.x * p.x + table_normal.y * p.y + table_normal.z * p.z + d;
+        if (dist_from_table > max_dist_from_table) {
+          max_dist_from_table = dist_from_table;
+        }
+      }
+      if (max_dist_from_table > 0.1) {
+        continue;
+      }
 
       Mat img_masked;
       img_bgr.copyTo(img_masked, table_mask);
@@ -104,12 +127,22 @@ int main(int argc, char **argv) {
       if (max_component_size > 0) {
         imshow("cloth", max_component_img);
         cloth_mask = max_component_img.clone();
+
       }
     }
 
     if (cloth_mask.size().area() > 0) {
       CloudPtr cloth_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr, pixel2voxel, cloth_mask);
-      viewer.showCloud(cloth_cloud_ptr);
+
+      stringstream payload;
+      payload << json["vid_idx"].GetInt() << " "
+                       << table_normal.x << " "
+                       << table_normal.y << " "
+                       << table_normal.z;
+      cloth_cloud_ptr->header.frame_id = payload.str();
+
+      pub.publish(cloth_cloud_ptr);
+      ros::spinOnce();
     }
 
     waitKey(60);

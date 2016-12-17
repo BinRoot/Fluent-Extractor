@@ -5,7 +5,9 @@
 #ifndef ROBOTCLOTHFOLDING_COMMONTOOLS_H
 #define ROBOTCLOTHFOLDING_COMMONTOOLS_H
 
-#include <pcl/common/common_headers.h>
+//#include <pcl/common/common_headers.h>
+#include <pcl_ros/point_cloud.h>
+#include <opencv2/opencv.hpp>
 // #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/keypoints/iss_3d.h>
 #include <pcl/segmentation/region_growing.h>
@@ -861,7 +863,11 @@ public:
     }
 
 
-    static bool find_biggest_plane(CloudPtr cloud_ptr, int* voxel2pixel, cv::Mat& mask) {
+    static bool find_biggest_plane(CloudPtr cloud_ptr,
+                                   int* voxel2pixel,
+                                   cv::Mat& mask,
+                                   PointT& midpoint,
+                                   PointT& normal) {
         std::cout << "Finding biggest plane in the pointcloud..." << std::endl;
 
         cv::Size size(cloud_ptr->width, cloud_ptr->height);
@@ -907,6 +913,7 @@ public:
                 if (clusters[cluster_idx].indices.size() > max_cluster_size && y_ratio > 0.3) {
                     max_cluster_size = clusters[cluster_idx].indices.size();
                     max_cluster_idx = cluster_idx;
+                    normal = cluster_normal;
                 }
             }
             if (max_cluster_idx < 0) {
@@ -914,13 +921,21 @@ public:
                 return false;
             } else {
                 std::vector<cv::Point2i> plane_points;
+                midpoint.x = 0; midpoint.y = 0; midpoint.z = 0;
                 for (int i = 0; i < clusters[max_cluster_idx].indices.size(); i++) {
                     int row, col;
                     vox2pix(voxel2pixel, clusters[max_cluster_idx].indices[i], row, col, cloud_ptr->width);
                     plane_points.push_back(cv::Point2i(col, row));
+                    PointT p = cloud_ptr->at(clusters[max_cluster_idx].indices[i]);
+                    midpoint.x += p.x;
+                    midpoint.y += p.y;
+                    midpoint.z += p.z;
 //                    PointT p = cloud_ptr->at(clusters[max_cluster_idx].indices[i]);
 //                    plane_cloud->push_back(p);
                 }
+                midpoint.x /= plane_points.size();
+                midpoint.y /= plane_points.size();
+                midpoint.z /= plane_points.size();
                 std::vector<cv::Point2i> hull;
                 cv::convexHull(plane_points, hull, true);
                 std::vector<std::vector<cv::Point2i>> hulls;
