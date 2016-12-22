@@ -1,7 +1,8 @@
 #include "ros/ros.h"
-#include "CommonTools.h"
 #include <opencv2/opencv.hpp>
 #include <pcl/visualization/cloud_viewer.h>
+
+#include "CommonTools.h"
 
 
 using namespace std;

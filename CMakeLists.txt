@@ -35,8 +35,8 @@ set(SOURCE_FILES ${SOURCE_FILES} src/FileFrameScanner.cpp src/FileFrameScanner.h
 set(SOURCE_FILES ${SOURCE_FILES} src/CommonTools.h)
 
 add_executable(vision_buffer src/vision_buffer.cpp ${SOURCE_FILES})
-target_link_libraries(vision_buffer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} mgl boost_graph)
+target_link_libraries(vision_buffer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
 
 ### Fluent Extractor
 add_executable(fluent_extractor src/fluent_extractor.cpp ${SOURCE_FILES})
-target_link_libraries(fluent_extractor ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} mgl boost_graph)
+target_link_libraries(fluent_extractor ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
