@@ -48,15 +48,20 @@ int main(int argc, char **argv) {
   Seg2D seg2D;
   vector<double> cloth_feature(2);
 
+  int pcd_filename_idx = 1;
+
   while(scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
     int pixel2voxel[img_bgr.size().area()];
     int voxel2pixel[img_bgr.size().area()];
     CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
+    cout << "pcd generated " << cloud_ptr->size() << endl;
 
     if (table_mask.size().area() == 0) {
-      CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, table_mask, table_midpoint, table_normal);
+      CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, img_bgr.size(), table_mask, table_midpoint, table_normal);
       cout << "table midpoint is " << table_midpoint << endl;
       cout << "table normal is " << table_normal << endl;
+      imshow("table_mask", table_mask);
+      waitKey(30);
     }
 
     Mat cloth_mask;
@@ -139,7 +144,10 @@ int main(int argc, char **argv) {
       payload << json["vid_idx"].GetInt() << " "
                        << table_normal.x << " "
                        << table_normal.y << " "
-                       << table_normal.z;
+                       << table_normal.z << " "
+                       << table_midpoint.x << " "
+                       << table_midpoint.y << " "
+                       << table_midpoint.z;
       cloth_cloud_ptr->header.frame_id = payload.str();
 
       pub.publish(cloth_cloud_ptr);

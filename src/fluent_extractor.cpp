@@ -1,8 +1,10 @@
 #include "ros/ros.h"
 #include <opencv2/opencv.hpp>
 #include <pcl/visualization/cloud_viewer.h>
+#include <pcl/io/pcd_io.h>
 
 #include "CommonTools.h"
+#include "FluentCalc.h"
 
 
 using namespace std;
@@ -13,73 +15,74 @@ public:
   CloudAnalyzer() {
     m_outfile.open("train.dat", std::ios_base::app);
     m_step_number = 1;
+    m_pcd_filename_idx = 1;
   }
 
   void callback(const CloudConstPtr& cloud_const_ptr) {
-    std::vector<float> m_fluent_vector;
+    
+    std::vector<float> fluent_vector;
 
-    // Get the table normal, which is saved in the header
+    // Get the table normal and vid_idx, which is saved in the header
     string payload = cloud_const_ptr->header.frame_id;
     int vid_idx;
     float table_normal_x, table_normal_y, table_normal_z;
-    sscanf(payload.c_str(), "%u %f %f %f", &vid_idx, &table_normal_x, &table_normal_y, &table_normal_z);
-    PointT table_normal;
+    float table_midpoint_x, table_midpoint_y, table_midpoint_z;
+    sscanf(payload.c_str(), "%u %f %f %f %f %f %f", &vid_idx,
+           &table_normal_x, &table_normal_y, &table_normal_z,
+           &table_midpoint_x, &table_midpoint_y, &table_midpoint_z);
+    PointT table_normal, table_midpoint;
     table_normal.x = table_normal_x;
     table_normal.y = table_normal_y;
     table_normal.z = table_normal_z;
+    table_midpoint.x = table_midpoint_x;
+    table_midpoint.y = table_midpoint_y;
+    table_midpoint.z = table_midpoint_z;
     if (m_vid_idx != vid_idx) {
       m_step_number = 1;
     }
     m_vid_idx = vid_idx;
 
+    // Compute width and height fluents
+    vector<float> width_height_fluents = m_fluent_calc.calc_width_and_height(cloud_const_ptr->makeShared(), table_normal);
+    fluent_vector.insert(fluent_vector.end(), width_height_fluents.begin(), width_height_fluents.end());
 
-    double min_z = std::numeric_limits<double>::infinity();
-    double max_z = -std::numeric_limits<double>::infinity();
-    double min_x = std::numeric_limits<double>::infinity();
-    double max_x = -std::numeric_limits<double>::infinity();;
+    // Compute thickness fluents
+    vector<float> thickness_fluents = m_fluent_calc.calc_thickness(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
+    fluent_vector.insert(fluent_vector.end(), thickness_fluents.begin(), thickness_fluents.end());
 
-    PointT min_z_point, max_z_point, min_x_point, max_x_point;
-    for (int i = 0; i < cloud_const_ptr->size(); i++) {
-      PointT p = cloud_const_ptr->at(i);
-      if (p.z > max_z) {
-        max_z = p.z;
-        max_z_point = p;
-      }
-      if (p.z < min_z) {
-        min_z = p.z;
-        min_z_point = p;
-      }
-      if (p.x > max_x) {
-        max_x = p.x;
-        max_x_point = p;
-      }
-      if (p.x < min_x) {
-        min_x = p.x;
-        min_x_point = p;
-      }
-    }
 
-    float width_of_cloth = pcl::euclideanDistance(min_x_point, max_x_point);
-    float length_of_cloth = pcl::euclideanDistance(min_z_point, max_z_point);
-
-    m_fluent_vector.push_back(width_of_cloth);
-    m_fluent_vector.push_back(length_of_cloth);
-
-    float dist = compute_fluent_dist(m_fluent_vector, m_prev_fluent_vector);
+    float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
 //    cout << "dist from prev fluent: " << dist << endl;
-    if (dist > 0.1) {
-      save_fluent_vector(m_fluent_vector);
-      cout << width_of_cloth << " x " << length_of_cloth << endl;
-      m_prev_fluent_vector = m_fluent_vector;
+    if (dist > 0.05) {
+      cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
+      //-- save pcd
+      stringstream pcd_filename;
+      pcd_filename << "out_" << m_step_number << ".pcd";
+      pcl::io::savePCDFile(pcd_filename.str(), *(cloud_const_ptr->makeShared()));
+      //--
+
+      save_fluent_vector(fluent_vector);
+      print_fluent_vector(fluent_vector);
+
+      m_prev_fluent_vector = fluent_vector;
     }
+    m_pcd_filename_idx++;
   }
 
 private:
-
+  FluentCalc m_fluent_calc;
   std::vector<float> m_prev_fluent_vector;
   std::ofstream m_outfile;
   int m_step_number;
   int m_vid_idx;
+  int m_pcd_filename_idx;
+  
+  void print_fluent_vector(std::vector<float> fluent_vector) {
+    for (int i = 0; i < fluent_vector.size(); i++) {
+      cout << fluent_vector[i] << "    ";
+    }
+    cout << endl;
+  }
 
   float compute_fluent_dist(std::vector<float> f1, std::vector<float> f2) {
     if (f1.size() != f2.size()) {

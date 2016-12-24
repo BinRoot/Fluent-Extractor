@@ -1,0 +1,54 @@
+#include "FluentCalc.h"
+
+using namespace std;
+
+vector<float> FluentCalc::calc_thickness(CloudPtr cloud, PointT table_normal, PointT table_midpoint) {
+    double d = -table_normal.x * table_midpoint.x - table_normal.y * table_midpoint.y - table_normal.z * table_midpoint.z;
+    float max_dist = 0;
+    for (int i = 0; i < cloud->size(); i++) {
+        PointT p = cloud->at(i);
+        float dist = table_normal.x * p.x + table_normal.y * p.y + table_normal.z * p.z + d;
+        if (dist > max_dist) {
+            max_dist = dist;
+        }
+    }
+    vector<float> fluents(1);
+    fluents[0] = max_dist;
+    return fluents;
+}
+
+
+vector<float> FluentCalc::calc_width_and_height(CloudPtr cloud, PointT normal) {
+    double min_z = std::numeric_limits<double>::infinity();
+    double max_z = -std::numeric_limits<double>::infinity();
+    double min_x = std::numeric_limits<double>::infinity();
+    double max_x = -std::numeric_limits<double>::infinity();;
+
+    PointT min_z_point, max_z_point, min_x_point, max_x_point;
+    for (int i = 0; i < cloud->size(); i++) {
+        PointT p = cloud->at(i);
+        if (p.z > max_z) {
+            max_z = p.z;
+            max_z_point = p;
+        }
+        if (p.z < min_z) {
+            min_z = p.z;
+            min_z_point = p;
+        }
+        if (p.x > max_x) {
+            max_x = p.x;
+            max_x_point = p;
+        }
+        if (p.x < min_x) {
+            min_x = p.x;
+            min_x_point = p;
+        }
+    }
+
+    float width_of_cloth = pcl::euclideanDistance(min_x_point, max_x_point);
+    float length_of_cloth = pcl::euclideanDistance(min_z_point, max_z_point);
+    vector<float> fluents(2);
+    fluents[0] = width_of_cloth;
+    fluents[1] = length_of_cloth;
+    return fluents;
+}

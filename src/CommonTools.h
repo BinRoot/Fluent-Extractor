@@ -865,12 +865,11 @@ public:
 
     static bool find_biggest_plane(CloudPtr cloud_ptr,
                                    int* voxel2pixel,
+				   cv::Size size,
                                    cv::Mat& mask,
                                    PointT& midpoint,
                                    PointT& normal) {
         std::cout << "Finding biggest plane in the pointcloud..." << std::endl;
-
-        cv::Size size(cloud_ptr->width, cloud_ptr->height);
 
         pcl::search::Search<PointT>::Ptr tree =
             boost::shared_ptr<pcl::search::Search<PointT> >(new pcl::search::KdTree<PointT>);
@@ -1058,8 +1057,8 @@ public:
                     cloud_ptr->push_back(p);
                 } else {
                     pixel2voxel[img_idx] = -1;
-                    p.z = std::numeric_limits<float>::quiet_NaN();
-//                    cloud_ptr->push_back(p);
+                    p.z = -10; //std::numeric_limits<float>::quiet_NaN();
+                    //cloud_ptr->push_back(p);
                 }
                 img_idx++;
                 //std::numeric_limits<float>::quiet_NaN();
