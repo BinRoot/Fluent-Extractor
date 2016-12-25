@@ -49,12 +49,11 @@ int main(int argc, char **argv) {
   vector<double> cloth_feature(2);
 
   int pcd_filename_idx = 1;
-
-  while(scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
+  ros::Rate rate(24.);
+  while(ros::ok() && scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
     int pixel2voxel[img_bgr.size().area()];
     int voxel2pixel[img_bgr.size().area()];
     CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
-    cout << "pcd generated " << cloud_ptr->size() << endl;
 
     if (table_mask.size().area() == 0) {
       CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, img_bgr.size(), table_mask, table_midpoint, table_normal);
@@ -152,11 +151,14 @@ int main(int argc, char **argv) {
 
       pub.publish(cloth_cloud_ptr);
       ros::spinOnce();
+      rate.sleep();
     }
 
     waitKey(60);
+    
+    if (json["loop_mode"].GetBool()) img_idx--;
   }
-
+  
   ros::spin();
   return 0;
 }
