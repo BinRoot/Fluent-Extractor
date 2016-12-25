@@ -38,6 +38,10 @@ set(SOURCE_FILES ${SOURCE_FILES} src/FluentCalc.cpp src/FluentCalc.h)
 add_executable(vision_buffer src/vision_buffer.cpp ${SOURCE_FILES})
 target_link_libraries(vision_buffer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
 
-### Fluent Extractor
+### Fluent Extractor (learning)
 add_executable(fluent_extractor src/fluent_extractor.cpp ${SOURCE_FILES})
 target_link_libraries(fluent_extractor ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
+
+### Action Simulator (inference)
+add_executable(action_inferer src/action_inferer.cpp ${SOURCE_FILES})
+target_link_libraries(action_inferer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
