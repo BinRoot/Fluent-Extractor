@@ -12,6 +12,7 @@
 #include <pcl/keypoints/iss_3d.h>
 #include <pcl/segmentation/region_growing.h>
 #include <pcl/common/distances.h>
+#include <pcl/common/centroid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/segmentation/region_growing_rgb.h>
