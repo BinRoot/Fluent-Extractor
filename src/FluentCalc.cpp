@@ -52,3 +52,51 @@ vector<float> FluentCalc::calc_width_and_height(CloudPtr cloud, PointT normal) {
     fluents[1] = length_of_cloth;
     return fluents;
 }
+
+
+vector<float> FluentCalc::x_and_y_symmetry(CloudPtr cloud) {
+    // Normalize X, Y coordinates  
+    float min_x = cloud->points[0].x, min_y = cloud->points[0].y;
+    float max_x = cloud->points[0].x, max_y = cloud->points[0].y;
+    for (int i=0; i<cloud->points.size(); i++) {
+        min_x = min(min_x, cloud->points[i].x);
+        min_y = min(min_y, cloud->points[i].y);
+        max_x = max(max_x, cloud->points[i].x);
+        max_y = max(max_y, cloud->points[i].y);
+    }
+    vector<PointT> normalized_points;
+    for (int i=0; i<cloud->points.size(); i++) {
+        PointT norm_point = PointT(cloud->points[i]);
+        norm_point.x = (cloud->points[i].x - min_x) / (max_x - min_x);
+        norm_point.y = (cloud->points[i].y - min_y) / (max_y - min_y);
+        normalized_points.push_back(norm_point);
+    }
+
+    // Drop Z coordinate and project onto X-Y plain
+    Eigen::MatrixXd proj(100, 100);
+    proj.setZero();
+    for (int i=0; i<normalized_points.size(); i++) {
+        proj(int(normalized_points[i].y * 99), int(normalized_points[i].x * 99)) = 1;
+    }
+
+    // Compute symmetry measures by pixel-wise comparision
+    float x_sym_measure = 0; // x_axis symmetry
+    for (int i=0; i<100; i++) {
+        for (int j=0; j<50; j++) {
+            x_sym_measure += int(proj(j, i) == proj(i, 99-j));
+        }
+    }
+    float y_sym_measure = 0; // y_axis symmetry
+    for (int i=0; i<100; i++) {
+        for (int j=0; j<50; j++) {
+            y_sym_measure += int(proj(i, i) == proj(i, 99-j));
+        }
+    }
+    x_sym_measure /= 100*100;
+    y_sym_measure /= 100*100;
+
+    vector<float> fluents;
+    fluents.push_back(x_sym_measure);
+    fluents.push_back(y_sym_measure);
+    return fluents;
+}
