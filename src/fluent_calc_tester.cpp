@@ -26,6 +26,11 @@ int main() {
     fluents = fluentCalc.x_and_y_symmetry(cloud);
     cout << "x_symmetry: " << fluents[0] << endl;
     cout << "y_symmetry: " << fluents[1] << endl;
+    fluents = fluentCalc.outer_bounding_box(cloud);
+    cout << "outer_bounding_box: ";
+    for (auto &t : fluents)
+        cout << t << " ";
+    cout << endl;
 
     return 0;
 }

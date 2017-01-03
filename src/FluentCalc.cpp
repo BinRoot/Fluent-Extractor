@@ -1,4 +1,8 @@
 #include "FluentCalc.h"
+#include <pcl/common/transforms.h>
+#include <pcl/point_types.h>
+#include <pcl/common/common.h>
+#include <pcl/visualization/pcl_visualizer.h>
 
 using namespace std;
 
@@ -100,3 +104,60 @@ vector<float> FluentCalc::x_and_y_symmetry(CloudPtr cloud) {
     fluents.push_back(y_sym_measure);
     return fluents;
 }
+
+// Computes a orinted outer-bounding bax from a point cloud.
+// It returns the a vector containing the xyz coordinates of the upper left
+// and lower right corner of the box respectively. 
+vector<float> FluentCalc::outer_bounding_box(CloudPtr cloud) {
+    Eigen::Vector4f pcaCentroid;
+    compute3DCentroid(*cloud, pcaCentroid);
+    Eigen::Matrix3f covariance;
+    computeCovarianceMatrixNormalized(*cloud, pcaCentroid, covariance);
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance, Eigen::ComputeEigenvectors);
+    Eigen::Matrix3f eigenVectorsPCA = eigen_solver.eigenvectors();
+    eigenVectorsPCA.col(2) = eigenVectorsPCA.col(0).cross(eigenVectorsPCA.col(1));
+
+    // Transform original cloud to the origin where the principal components correspond to the axes.
+    Eigen::Matrix4f projectionTransform(Eigen::Matrix4f::Identity());
+    projectionTransform.block<3,3>(0,0) = eigenVectorsPCA.transpose();
+    projectionTransform.block<3,1>(0,3) = -1.f * (projectionTransform.block<3,3>(0,0) * pcaCentroid.head<3>());
+    CloudPtr cloudPointsProjected(new pcl::PointCloud<PointT>);
+    transformPointCloud(*cloud, *cloudPointsProjected, projectionTransform);
+
+    // Get the minimum and maximum points of the transformed cloud.
+    PointT minPoint, maxPoint;
+    getMinMax3D(*cloudPointsProjected, minPoint, maxPoint);
+    const Eigen::Vector3f meanDiagonal = 0.5f*(maxPoint.getVector3fMap() + minPoint.getVector3fMap());
+
+    // Final transform
+    const Eigen::Quaternionf bboxQuaternion(eigenVectorsPCA);
+    const Eigen::Vector3f bboxTransform = eigenVectorsPCA * meanDiagonal + pcaCentroid.head<3>();
+
+    Eigen::Vector3f upperLeft(minPoint.x, minPoint.y, minPoint.z);
+    Eigen::Vector3f lowerRight(maxPoint.x, maxPoint.y, maxPoint.z);
+    upperLeft = bboxQuaternion * (upperLeft + bboxTransform);
+    lowerRight = bboxQuaternion * (lowerRight + bboxTransform);
+
+    vector<float> fluents;
+    for (int i=0; i<3; i++) {
+        fluents.push_back(upperLeft[i]);
+    }
+    for (int i=0; i<3; i++) {
+        fluents.push_back(lowerRight[i]);
+    }
+
+    // Uncomment this code to see how well the bounding box fits.
+    /*
+    pcl::visualization::PCLVisualizer *visu;
+    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
+    int vp;
+    visu->addPointCloud(cloud, "bboxedCloud", vp);
+    visu->addCube(bboxTransform, bboxQuaternion, maxPoint.x - minPoint.x, maxPoint.y - minPoint.y, maxPoint.z - minPoint.z, "bbox", vp);
+    while (!visu->wasStopped ()) {
+        visu->spinOnce(100);
+    }
+    */
+
+    return fluents;
+}
+
