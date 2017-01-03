@@ -106,8 +106,8 @@ vector<float> FluentCalc::x_and_y_symmetry(CloudPtr cloud) {
 }
 
 // Computes a orinted outer-bounding bax from a point cloud.
-// It returns the a vector containing the xyz coordinates of the upper left
-// and lower right corner of the box respectively. 
+// It returns the a vector containing the xyz coordinates of the bounding box's two diagonal
+// corners, respectively.
 vector<float> FluentCalc::outer_bounding_box(CloudPtr cloud) {
     Eigen::Vector4f pcaCentroid;
     compute3DCentroid(*cloud, pcaCentroid);
@@ -121,7 +121,7 @@ vector<float> FluentCalc::outer_bounding_box(CloudPtr cloud) {
     Eigen::Matrix4f projectionTransform(Eigen::Matrix4f::Identity());
     projectionTransform.block<3,3>(0,0) = eigenVectorsPCA.transpose();
     projectionTransform.block<3,1>(0,3) = -1.f * (projectionTransform.block<3,3>(0,0) * pcaCentroid.head<3>());
-    CloudPtr cloudPointsProjected(new pcl::PointCloud<PointT>);
+    CloudPtr cloudPointsProjected(new pcl::PointCloud<PointT>());
     transformPointCloud(*cloud, *cloudPointsProjected, projectionTransform);
 
     // Get the minimum and maximum points of the transformed cloud.
@@ -133,31 +133,40 @@ vector<float> FluentCalc::outer_bounding_box(CloudPtr cloud) {
     const Eigen::Quaternionf bboxQuaternion(eigenVectorsPCA);
     const Eigen::Vector3f bboxTransform = eigenVectorsPCA * meanDiagonal + pcaCentroid.head<3>();
 
-    Eigen::Vector3f upperLeft(minPoint.x, minPoint.y, minPoint.z);
-    Eigen::Vector3f lowerRight(maxPoint.x, maxPoint.y, maxPoint.z);
-    upperLeft = bboxQuaternion * (upperLeft + bboxTransform);
-    lowerRight = bboxQuaternion * (lowerRight + bboxTransform);
+    float xSize  = maxPoint.x-minPoint.x, ySize = maxPoint.y-minPoint.y, zSize = maxPoint.z-minPoint.z;
+    Eigen::Vector3f boxCorner_1(-xSize/2, -ySize/2, -zSize/2);
+    Eigen::Vector3f boxCorner_2(xSize/2, ySize/2, zSize/2);
+    boxCorner_1 = bboxQuaternion.toRotationMatrix() * boxCorner_1 + bboxTransform;
+    boxCorner_2 = bboxQuaternion.toRotationMatrix() * boxCorner_2 + bboxTransform;
 
     vector<float> fluents;
     for (int i=0; i<3; i++) {
-        fluents.push_back(upperLeft[i]);
+        fluents.push_back(boxCorner_1[i]);
     }
     for (int i=0; i<3; i++) {
-        fluents.push_back(lowerRight[i]);
+        fluents.push_back(boxCorner_2[i]);
     }
 
     // Uncomment this code to see how well the bounding box fits.
     /*
     pcl::visualization::PCLVisualizer *visu;
     visu = new pcl::visualization::PCLVisualizer("PlyViewer");
-    int vp;
-    visu->addPointCloud(cloud, "bboxedCloud", vp);
-    visu->addCube(bboxTransform, bboxQuaternion, maxPoint.x - minPoint.x, maxPoint.y - minPoint.y, maxPoint.z - minPoint.z, "bbox", vp);
+
+    CloudPtr corners(new pcl::PointCloud<PointT>()); 
+    PointT corner_1, corner_2;
+    corner_1.x = boxCorner_1[0]; corner_1.y = boxCorner_1[1]; corner_1.z = boxCorner_1[2];
+    corner_2.x = boxCorner_2[0]; corner_2.y = boxCorner_2[1]; corner_2.z = boxCorner_2[2];
+    corners->push_back(corner_1);
+    corners->push_back(corner_2);
+    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> c1 (cloud, 0, 255, 0);
+    pcl::visualization::PointCloudColorHandlerCustom<PointT> c2 (corners, 255, 0, 0);
+    visu->addPointCloud(cloud, c1, "bboxedCloud");
+    visu->addPointCloud(corners, c2, "corners");
+    visu->addCube(bboxTransform, bboxQuaternion, xSize, ySize, zSize, "bbox");
     while (!visu->wasStopped ()) {
         visu->spinOnce(100);
     }
     */
-
     return fluents;
 }
 
