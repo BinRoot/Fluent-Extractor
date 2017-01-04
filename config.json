@@ -1,6 +1,6 @@
 {
     "vids_directory": "/home/binroot/res/cloth_folding_vids/",
     "vid_idx": 1,
-    "start_frame_idx": 0,
-    "loop_mode": true
+    "start_frame_idx": 1,
+    "loop_mode": false
 }

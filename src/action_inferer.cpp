@@ -7,6 +7,7 @@
 
 #include "CommonTools.h"
 #include "FluentCalc.h"
+#include "FoldSimulator.h"
 
 
 using namespace std;
@@ -35,6 +36,16 @@ public:
     table_midpoint.z = table_midpoint_z;
 
 
+    Mat cloud_mask;
+    get_cloud_mask(cloud_const_ptr, cloud_mask);
+    imshow("cloud_mask", cloud_mask);
+    waitKey(30);
+
+
+    // fold the cloth
+    infer_best_fold(cloud_mask);
+
+
     vector<float> fluent_vector;
     
     // Compute width and height fluents
@@ -47,12 +58,79 @@ public:
     
     print_fluent_vector(fluent_vector);
 
-    ros::shutdown();
+//    ros::shutdown();
   }
 
 private:
   FluentCalc m_fluent_calc;
-  
+
+  void infer_best_fold(Mat& cloth_mask) {
+    // find grip candidates
+    // find release candidates for each grip candidate
+    // compute score
+    // select grip and release points of max score
+
+    FoldSimulator simulator(cloth_mask);
+    simulator.run_gui();
+
+  }
+
+
+  void get_cloud_mask(const CloudConstPtr& cloud_const_ptr, Mat& cloud_mask) {
+    // collect 2d points
+    vector<cv::Point2f> points;
+    float x_min = std::numeric_limits<float>::infinity();
+    float y_min = std::numeric_limits<float>::infinity();
+    float x_max = 0;
+    float y_max = 0;
+
+
+    for (int i = 0; i < cloud_const_ptr->size(); i++) {
+      PointT p = cloud_const_ptr->at(i);
+      if (p.x < x_min) x_min = p.x;
+      if (p.x > x_max) x_max = p.x;
+      if (p.y < y_min) y_min = p.y;
+      if (p.y > y_max) y_max = p.y;
+
+      cv::Point2f p2;
+      p2.x = p.x;
+      p2.y = p.y;
+      points.push_back(p2);
+    }
+
+    float scale_x = x_max - x_min;
+    float scale_y = y_max - y_min;
+    cout << "scale x: " << scale_x << ", scale_y: " << scale_y << endl;
+
+    float mask_width = 256;
+    float mask_height = mask_width * (scale_y / scale_x);
+    cout << "mask width: " << mask_width << ", mask_height: " << mask_height << endl;
+
+    Mat cloud_mask_raw = Mat::zeros(mask_height, mask_width, CV_8U);
+    cloud_mask = Mat::zeros(mask_height, mask_width, CV_8U);
+    for (int i = 0; i < points.size(); i++) {
+      int x = mask_width * (points[i].x - x_min) / scale_x;
+      clip_to_bounds(x, 0, int(mask_width) - 1);
+      int y = mask_height * (points[i].y - y_min) / scale_y;
+      clip_to_bounds(y, 0, int(mask_height) - 1);
+      cloud_mask_raw.at<uchar>(y, x) = 255;
+    }
+
+    CommonTools::dilate_erode(cloud_mask_raw, 1);
+    CommonTools::dilate_erode(cloud_mask_raw, 2);
+    CommonTools::dilate_erode(cloud_mask_raw, 3);
+
+    CommonTools::draw_contour(cloud_mask, cloud_mask_raw.clone(), cv::Scalar(255));
+  }
+
+  void clip_to_bounds(int& x, int min_val, int max_val) {
+    if (x < min_val) {
+      x = min_val;
+    } else if (x > max_val) {
+      x = max_val;
+    }
+  }
+
   void print_fluent_vector(std::vector<float> fluent_vector) {
     for (int i = 0; i < fluent_vector.size(); i++) {
       cout << fluent_vector[i] << "    ";

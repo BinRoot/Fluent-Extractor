@@ -34,6 +34,7 @@ set(SOURCE_FILES ${SOURCE_FILES} src/Seg2D.cpp src/Seg2D.h)
 set(SOURCE_FILES ${SOURCE_FILES} src/FileFrameScanner.cpp src/FileFrameScanner.h)
 set(SOURCE_FILES ${SOURCE_FILES} src/CommonTools.h)
 set(SOURCE_FILES ${SOURCE_FILES} src/FluentCalc.cpp src/FluentCalc.h)
+set(SOURCE_FILES ${SOURCE_FILES} src/FoldSimulator.cpp src/FoldSimulator.h)
 
 add_executable(vision_buffer src/vision_buffer.cpp ${SOURCE_FILES})
 target_link_libraries(vision_buffer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)

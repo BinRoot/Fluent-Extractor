@@ -524,11 +524,29 @@ public:
         cv::dilate(img, img, element);
     }
 
+    static void dilate_erode(cv::Mat& img, int size) {
+        cv::Mat element = cv::getStructuringElement(
+                cv::MORPH_ELLIPSE,
+                cv::Size(2*size + 1, 2*size+1),
+                cv::Point(size, size)
+        );
+        cv::dilate(img, img, element);
+        cv::erode(img, img, element);
+    }
+
     static void draw_contour(cv::Mat& img, const cv::Mat& mask, cv::Scalar color) {
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
         cv::findContours(mask, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
-        cv::drawContours(img, contours, 0, color, 2);
+        int max_contour_size = 0;
+        int max_contour_idx = -1;
+        for (int i = 0; i < contours.size(); i++) {
+            if (contours[i].size() > max_contour_size) {
+                max_contour_size = contours[i].size();
+                max_contour_idx = i;
+            }
+        }
+        cv::drawContours(img, contours, max_contour_idx, color, -1);
     }
 
     static double color_dist(cv::Vec3b color, cv::Vec3b color1){
@@ -690,6 +708,14 @@ public:
 
     static bool is_row_col_in_mask(int row, int col, const cv::Mat& mask) {
         return mask.at<uchar>(row, col) > 0;
+    }
+
+    static cv::Mat threshold(cv::Mat img) {
+        cv::Mat shirt_mask;
+        cv::cvtColor(img, shirt_mask, CV_RGB2GRAY);
+        cv::threshold(shirt_mask, shirt_mask, 250, 255, CV_THRESH_BINARY);
+        shirt_mask = 255 - shirt_mask;
+        return shirt_mask;
     }
 
     static CloudPtr get_keypoints(CloudPtr cloud) {

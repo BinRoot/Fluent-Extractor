@@ -152,6 +152,7 @@ int main(int argc, char **argv) {
       pub.publish(cloth_cloud_ptr);
       ros::spinOnce();
       rate.sleep();
+      waitKey(0);
     }
 
     waitKey(60);
