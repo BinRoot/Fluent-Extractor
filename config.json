@@ -3,5 +3,6 @@
     "vid_idx": 9,
     "start_frame_idx": 0,
     "use_kinect": true,
-    "kinect_topic": "/kinect2/sd/points"
+    "kinect_topic": "/kinect2/sd/points",
+    "loop_mode": false
 }

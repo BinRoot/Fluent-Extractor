@@ -134,9 +134,10 @@ private:
   tf::Transform m_kinect2_ex_tf;
 };
 
-
 int main(int argc, char **argv) {
   ros::init(argc, argv, "camera_pointer");
+
+  cout << "in main of camera_pointer" << endl;
 
   // Read the config file
   FILE* fp = fopen(argv[1], "rb");

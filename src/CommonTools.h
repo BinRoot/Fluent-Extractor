@@ -12,6 +12,7 @@
 #include <pcl/keypoints/iss_3d.h>
 #include <pcl/segmentation/region_growing.h>
 #include <pcl/common/distances.h>
+#include <pcl/common/centroid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/segmentation/region_growing_rgb.h>
@@ -524,11 +525,29 @@ public:
         cv::dilate(img, img, element);
     }
 
+    static void dilate_erode(cv::Mat& img, int size) {
+        cv::Mat element = cv::getStructuringElement(
+                cv::MORPH_ELLIPSE,
+                cv::Size(2*size + 1, 2*size+1),
+                cv::Point(size, size)
+        );
+        cv::dilate(img, img, element);
+        cv::erode(img, img, element);
+    }
+
     static void draw_contour(cv::Mat& img, const cv::Mat& mask, cv::Scalar color) {
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
         cv::findContours(mask, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
-        cv::drawContours(img, contours, 0, color, 2);
+        int max_contour_size = 0;
+        int max_contour_idx = -1;
+        for (int i = 0; i < contours.size(); i++) {
+            if (contours[i].size() > max_contour_size) {
+                max_contour_size = contours[i].size();
+                max_contour_idx = i;
+            }
+        }
+        cv::drawContours(img, contours, max_contour_idx, color, -1);
     }
 
     static double color_dist(cv::Vec3b color, cv::Vec3b color1){
@@ -690,6 +709,14 @@ public:
 
     static bool is_row_col_in_mask(int row, int col, const cv::Mat& mask) {
         return mask.at<uchar>(row, col) > 0;
+    }
+
+    static cv::Mat threshold(cv::Mat img) {
+        cv::Mat shirt_mask;
+        cv::cvtColor(img, shirt_mask, CV_RGB2GRAY);
+        cv::threshold(shirt_mask, shirt_mask, 250, 255, CV_THRESH_BINARY);
+        shirt_mask = 255 - shirt_mask;
+        return shirt_mask;
     }
 
     static CloudPtr get_keypoints(CloudPtr cloud) {
@@ -865,12 +892,11 @@ public:
 
     static bool find_biggest_plane(CloudPtr cloud_ptr,
                                    int* voxel2pixel,
+				   cv::Size size,
                                    cv::Mat& mask,
                                    PointT& midpoint,
                                    PointT& normal) {
         std::cout << "Finding biggest plane in the pointcloud..." << std::endl;
-
-        cv::Size size(cloud_ptr->width, cloud_ptr->height);
 
         pcl::search::Search<PointT>::Ptr tree =
             boost::shared_ptr<pcl::search::Search<PointT> >(new pcl::search::KdTree<PointT>);
@@ -1084,8 +1110,8 @@ public:
                     cloud_ptr->push_back(p);
                 } else {
                     pixel2voxel[img_idx] = -1;
-                    p.z = std::numeric_limits<float>::quiet_NaN();
-//                    cloud_ptr->push_back(p);
+                    p.z = -10; //std::numeric_limits<float>::quiet_NaN();
+                    //cloud_ptr->push_back(p);
                 }
                 img_idx++;
                 //std::numeric_limits<float>::quiet_NaN();

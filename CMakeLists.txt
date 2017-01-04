@@ -33,14 +33,24 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -O1")
 set(SOURCE_FILES ${SOURCE_FILES} src/Seg2D.cpp src/Seg2D.h)
 set(SOURCE_FILES ${SOURCE_FILES} src/FileFrameScanner.cpp src/FileFrameScanner.h)
 set(SOURCE_FILES ${SOURCE_FILES} src/CommonTools.h)
+set(SOURCE_FILES ${SOURCE_FILES} src/FluentCalc.cpp src/FluentCalc.h)
+set(SOURCE_FILES ${SOURCE_FILES} src/FoldSimulator.cpp src/FoldSimulator.h)
 
 add_executable(vision_buffer src/vision_buffer.cpp ${SOURCE_FILES})
-target_link_libraries(vision_buffer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} mgl boost_graph)
+target_link_libraries(vision_buffer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
 
-### Fluent Extractor
+### Fluent Extractor (learning)
 add_executable(fluent_extractor src/fluent_extractor.cpp ${SOURCE_FILES})
-target_link_libraries(fluent_extractor ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} mgl boost_graph)
+target_link_libraries(fluent_extractor ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
 
 ### Camera Pointer
 add_executable(cam_ui src/camera_pointer.cpp ${SOURCE_FILES})
-target_link_libraries(cam_ui ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} mgl boost_graph)
+target_link_libraries(cam_ui ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
+
+### Action Simulator (inference)
+add_executable(action_inferer src/action_inferer.cpp ${SOURCE_FILES})
+target_link_libraries(action_inferer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
+
+### Fluent Calculator Tester
+add_executable(fluent_calc_tester src/fluent_calc_tester.cpp ${SOURCE_FILES})
+target_link_libraries(fluent_calc_tester ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)

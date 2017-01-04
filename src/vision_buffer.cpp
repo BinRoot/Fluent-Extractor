@@ -1,9 +1,10 @@
-#include "ros/ros.h"
-#include "FileFrameScanner.h"
-#include "CommonTools.h"
 #include <opencv2/opencv.hpp>
 #include <sstream>
 #include <pcl/visualization/cloud_viewer.h>
+
+#include "ros/ros.h"
+#include "FileFrameScanner.h"
+#include "CommonTools.h"
 
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
@@ -19,6 +20,7 @@ using namespace std;
 using namespace cv;
 using namespace rapidjson;
 
+
 class BufferManager {
 public:
   BufferManager(int vid_idx, ros::Publisher& pub) {
@@ -28,7 +30,7 @@ public:
 
   void process(CloudPtr cloud_ptr, Mat img_bgr, int* pixel2voxel, int* voxel2pixel) {
     if (m_table_mask.size().area() == 0) {
-      CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, m_table_mask, m_table_midpoint, m_table_normal);
+      CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, img_bgr.size(), m_table_mask, m_table_midpoint, m_table_normal);
       cout << "table midpoint is " << m_table_midpoint << endl;
       cout << "table normal is " << m_table_normal << endl;
     }
@@ -145,6 +147,7 @@ public:
       CloudPtr cloth_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr, pixel2voxel, cloth_mask);
 
       stringstream payload;
+
       payload << m_vid_idx << " "
               << m_table_normal.x << " "
               << m_table_normal.y << " "
@@ -157,7 +160,9 @@ public:
     }
 
     waitKey(60);
+   
   }
+
 
   void kinect_callback(const CloudConstPtr& cloud_ptr) {
     Mat img;
@@ -214,7 +219,7 @@ int main(int argc, char **argv) {
       CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
 
       buffer_manager.process(cloud_ptr, img_bgr, pixel2voxel, voxel2pixel);
-
+      if (json["loop_mode"].GetBool()) img_idx--;
     }
   }
 
