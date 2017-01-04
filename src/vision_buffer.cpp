@@ -151,7 +151,10 @@ public:
       payload << m_vid_idx << " "
               << m_table_normal.x << " "
               << m_table_normal.y << " "
-              << m_table_normal.z;
+              << m_table_normal.z << " "
+              << m_table_midpoint.x << " "
+              << m_table_midpoint.y << " "
+              << m_table_midpoint.z;
       cloth_cloud_ptr->header.frame_id = payload.str();
 
       m_pub.publish(cloth_cloud_ptr);
