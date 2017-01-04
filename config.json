@@ -1,5 +1,7 @@
 {
     "vids_directory": "/home/robot/res/cloth_folding_vids/",
     "vid_idx": 9,
-    "start_frame_idx": 0
+    "start_frame_idx": 0,
+    "use_kinect": true,
+    "kinect_topic": "/kinect2/sd/points"
 }

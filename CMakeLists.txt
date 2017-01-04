@@ -40,3 +40,7 @@ target_link_libraries(vision_buffer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${Ope
 ### Fluent Extractor
 add_executable(fluent_extractor src/fluent_extractor.cpp ${SOURCE_FILES})
 target_link_libraries(fluent_extractor ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} mgl boost_graph)
+
+### Camera Pointer
+add_executable(cam_ui src/camera_pointer.cpp ${SOURCE_FILES})
+target_link_libraries(cam_ui ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} mgl boost_graph)

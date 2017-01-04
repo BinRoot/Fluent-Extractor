@@ -949,6 +949,32 @@ public:
         return false;
     }
 
+    static PointT get_3d_approx(cv::Point p, cv::Size size, int* pixel2voxel, CloudPtr cloud_ptr) {
+      int n = 5;  // neighborhood
+      int start_col = cv::max(p.x - n, 0);
+      int end_col = cv::min(p.x + n, size.width - 1);
+      int start_row = cv::max(p.y - n, 0);
+      int end_row = cv::min(p.y + n, size.height - 1);
+      PointT pt3d;
+      pt3d.x = -999;
+      pt3d.y = -999;
+      pt3d.z = -999;
+      double closest_dist = 999999;
+      for (int row = start_row; row < end_row; row++) {
+        for (int col = start_col; col < end_col; col++) {
+          int cloud_idx = CommonTools::pix2vox(pixel2voxel, cv::Point(col, row), size.width);
+          if (cloud_idx >= 0) {
+            cv::Point test_point(col, row);
+            double dist = cv::norm(test_point - p);
+            if (dist < closest_dist) {
+              closest_dist = dist;
+              pt3d = cloud_ptr->at(cloud_idx);
+            }
+          }
+        }
+      }
+      return pt3d;
+    }
 
     static bool get_cloud_info(pcl::PointCloud<pcl::PointXYZRGB>& cloud,
                                cv::Mat& img,
