@@ -46,3 +46,7 @@ target_link_libraries(fluent_extractor ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${
 ### Action Simulator (inference)
 add_executable(action_inferer src/action_inferer.cpp ${SOURCE_FILES})
 target_link_libraries(action_inferer ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)
+
+### Fluent Calculator Tester
+add_executable(fluent_calc_tester src/fluent_calc_tester.cpp ${SOURCE_FILES})
+target_link_libraries(fluent_calc_tester ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS} ${PCL_LIBRARIES} boost_graph)

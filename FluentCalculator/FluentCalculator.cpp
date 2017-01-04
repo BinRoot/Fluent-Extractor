@@ -135,13 +135,13 @@ vector<PointXYZ> FluentCalculator::outerBoundingBox(PointCloud<PointXYZ>::Ptr cl
 
 float FluentCalculator::height(PointCloud<PointXYZ>::Ptr cloud) {
 	PointXYZ minPoint, maxPoint;
-	getMinMax3D(*cloudPointsProjected, minPoint, maxPoint);
+	getMinMax3D(cloud, minPoint, maxPoint);
 	return maxPoint.x - minPoint.x;
 }
 
 float FluentCalculator::width(PointCloud<PointXYZ>::Ptr cloud) {
 	PointXYZ minPoint, maxPoint;
-	getMinMax3D(*cloudPointsProjected, minPoint, maxPoint);
+	getMinMax3D(cloud, minPoint, maxPoint);
 	return maxPoint.y - minPoint.y;
 }
 
