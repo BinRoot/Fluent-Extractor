@@ -28,7 +28,7 @@ public:
     m_pub = pub;
   }
 
-  void process(CloudPtr cloud_ptr, Mat img_bgr, int* pixel2voxel, int* voxel2pixel) {
+  void process(CloudPtr cloud_ptr, Mat img_bgr, int* pixel2voxel, int* voxel2pixel, int img_idx=-1) {
     if (m_table_mask.size().area() == 0) {
       CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, img_bgr.size(), m_table_mask, m_table_midpoint, m_table_normal);
       cout << "table midpoint is " << m_table_midpoint << endl;
@@ -137,6 +137,14 @@ public:
 
       if (max_component_size > 0) {
         imshow("cloth", max_component_img);
+        stringstream cloth_filename;
+        cloth_filename << "out/cloth_mask_" << img_idx << ".png";
+        imwrite(cloth_filename.str(), max_component_img);
+
+        stringstream rgb_filename;
+        rgb_filename << "out/img_" << img_idx << ".png";
+        imwrite(rgb_filename.str(), img_bgr);
+
         cloth_mask = max_component_img.clone();
       }
     } else {
@@ -158,6 +166,7 @@ public:
       cloth_cloud_ptr->header.frame_id = payload.str();
 
       m_pub.publish(cloth_cloud_ptr);
+      waitKey(0);
     } else {
       cout << "no cloth found" << endl;
     }
@@ -221,7 +230,7 @@ int main(int argc, char **argv) {
       int voxel2pixel[img_bgr.size().area()];
       CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
 
-      buffer_manager.process(cloud_ptr, img_bgr, pixel2voxel, voxel2pixel);
+      buffer_manager.process(cloud_ptr, img_bgr, pixel2voxel, voxel2pixel, img_idx);
       if (json["loop_mode"].GetBool()) img_idx--;
     }
   }

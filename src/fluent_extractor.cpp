@@ -50,15 +50,18 @@ public:
     vector<float> thickness_fluents = m_fluent_calc.calc_thickness(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
     fluent_vector.insert(fluent_vector.end(), thickness_fluents.begin(), thickness_fluents.end());
 
+    // Compute bounding-box fluents
+    vector<float> bbox_fluents = m_fluent_calc.calc_bbox(cloud_const_ptr->makeShared());
+    fluent_vector.insert(fluent_vector.end(), bbox_fluents.begin(), bbox_fluents.end());
 
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
 //    cout << "dist from prev fluent: " << dist << endl;
     if (dist > 0.05) {
       cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
       //-- save pcd
-      stringstream pcd_filename;
-      pcd_filename << "out_" << m_step_number << ".pcd";
-      pcl::io::savePCDFile(pcd_filename.str(), *(cloud_const_ptr->makeShared()));
+//      stringstream pcd_filename;
+//      pcd_filename << "out_" << m_step_number << ".pcd";
+//      pcl::io::savePCDFile(pcd_filename.str(), *(cloud_const_ptr->makeShared()));
       //--
 
       save_fluent_vector(fluent_vector);

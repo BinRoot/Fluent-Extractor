@@ -20,6 +20,9 @@
 
 #include <tf/transform_datatypes.h>
 
+#include <pcl/common/transformation_from_correspondences.h>
+#include <pcl/common/transforms.h>
+
 
 using namespace std;
 using namespace cv;
@@ -50,19 +53,22 @@ public:
         cout << "grip: " << m_grip_point << " --> " << grip_3d << endl;
         cout << "release: " << m_release_point << " --> " << release_3d << endl;
 
-        tf::Vector3 obj_local_grip_pos(grip_3d.x, grip_3d.y, grip_3d.z);
-        tf::Vector3 baxter_grip_pos = m_kinect2_ex_tf.inverse() * obj_local_grip_pos;
-        tf::Vector3 obj_local_release_pos(grip_3d.x, grip_3d.y, grip_3d.z);
-        tf::Vector3 baxter_release_pos = m_kinect2_ex_tf.inverse() * obj_local_release_pos;
+        grip_3d = pcl::transformPoint(grip_3d, m_trans);
+        release_3d = pcl::transformPoint(release_3d, m_trans);
+
+//        tf::Vector3 obj_local_grip_pos(grip_3d.x, grip_3d.y, grip_3d.z);
+//        tf::Vector3 baxter_grip_pos = m_kinect2_ex_tf.inverse() * obj_local_grip_pos;
+//        tf::Vector3 obj_local_release_pos(grip_3d.x, grip_3d.y, grip_3d.z);
+//        tf::Vector3 baxter_release_pos = m_kinect2_ex_tf.inverse() * obj_local_release_pos;
 
         std_msgs::String msg;
         msg.data = "1," +
-            to_string(baxter_grip_pos.x()) + "," +
-            to_string(baxter_grip_pos.y()) + "," +
-            to_string(baxter_grip_pos.z()) + "," +
-            to_string(baxter_release_pos.x()) + "," +
-            to_string(baxter_release_pos.y()) + "," +
-            to_string(baxter_release_pos.z());
+            to_string(grip_3d.x) + "," +
+            to_string(grip_3d.y) + "," +
+            to_string(grip_3d.z) + "," +
+            to_string(release_3d.x) + "," +
+            to_string(release_3d.y) + "," +
+            to_string(release_3d.z);
         m_publisher.publish(msg);
         ros::spinOnce();
         m_do_fold = false;
@@ -117,6 +123,27 @@ public:
     tf::Transform t0(q0, tf::Vector3(0, 0, 0));
     tf::Transform t1(q1, tf::Vector3(0, 0, 0));
     m_kinect2_ex_tf = t1 * t0 * kinect2_ex;
+
+    Eigen::Vector3f cam_1(0.224488,0.302983,0.628);
+    Eigen::Vector3f cam_2(0.0887969,0.303677,0.633);
+    Eigen::Vector3f cam_3(0.225015,0.178694,0.777);
+    Eigen::Vector3f cam_4(0.0876768,0.180338,0.775);
+    Eigen::Vector3f bax_1(0.5, -0.3, 0.045);
+    Eigen::Vector3f bax_2(0.5, -0.15, 0.045);
+    Eigen::Vector3f bax_3(0.7, -0.3, 0.045);
+    Eigen::Vector3f bax_4(0.7, -0.15, 0.045);
+    m_correspondences.add(cam_1, bax_1, 1);
+    m_correspondences.add(cam_2, bax_2, 1);
+    m_correspondences.add(cam_3, bax_3, 1);
+    m_correspondences.add(cam_4, bax_4, 1);
+    m_trans = m_correspondences.getTransformation();
+    ofstream myfile;
+    myfile.open("cam_bax_trans.txt");
+    for (int i = 0; i < 16; i++) {
+      cout << m_trans.data()[i] << endl;
+      myfile << m_trans.data()[i] << endl;
+    }
+    myfile.close();
   }
 
 private:

@@ -108,7 +108,7 @@ vector<float> FluentCalc::x_and_y_symmetry(CloudPtr cloud) {
 // Computes a orinted outer-bounding bax from a point cloud.
 // It returns the a vector containing the xyz coordinates of the bounding box's two diagonal
 // corners, respectively.
-vector<float> FluentCalc::outer_bounding_box(CloudPtr cloud) {
+vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
     Eigen::Vector4f pcaCentroid;
     compute3DCentroid(*cloud, pcaCentroid);
     Eigen::Matrix3f covariance;
@@ -148,7 +148,7 @@ vector<float> FluentCalc::outer_bounding_box(CloudPtr cloud) {
     }
 
     // Uncomment this code to see how well the bounding box fits.
-    /*
+
     pcl::visualization::PCLVisualizer *visu;
     visu = new pcl::visualization::PCLVisualizer("PlyViewer");
 
@@ -163,10 +163,15 @@ vector<float> FluentCalc::outer_bounding_box(CloudPtr cloud) {
     visu->addPointCloud(cloud, c1, "bboxedCloud");
     visu->addPointCloud(corners, c2, "corners");
     visu->addCube(bboxTransform, bboxQuaternion, xSize, ySize, zSize, "bbox");
+
+    stringstream filename;
+
+    filename << "out/fluent_" << time(0) << ".png";
+
     while (!visu->wasStopped ()) {
-        visu->spinOnce(100);
+        visu->spinOnce(200);
     }
-    */
+
     return fluents;
 }
 

@@ -35,6 +35,7 @@ def dist_pos(pos_a, pos_b):
 
 grip_quat_near_right = Quaternion(x=-0.166755840964, y=0.984408007754, z=0.0474837929061, w=0.0296420847001)
 grip_quat_near_left = Quaternion(x=0.138610321149, y=0.989974768164, z=0.00934995996438, w=0.0254895177964)
+grip_quat_diag1_left = Quaternion(x=-0.0272329635807, y=0.939143659652, z=-0.330272832324, w=0.0904842995141)
 
 class ClothFolder(object):
 
@@ -360,7 +361,7 @@ class ClothFolder(object):
                     reached_middle = True
                 rospy.sleep(0.2)
                 sleep_count += 1
-                if dist < 0.02 or sleep_count > 50:
+                if dist < 0.01 or sleep_count > 50:
                     break
             else:
                 break
@@ -505,30 +506,78 @@ def callback(data):
     if right_grip_ik:
         limb = 'right'
         grip_quat_near = grip_quat_near_right
-    elif left_grip_ik:
-        limb = 'left'
-        grip_quat_near = grip_quat_near_left
-    else:
-        print('grip actions impossible')
-        print('right grip ik', right_grip_ik)
-        print('left grip ik', left_grip_ik)
-    if limb:
-#        folder.rest('right')
-#        folder.rest('left')
         print('gripping at', grip)
-        print('gripping with', limb)
-        folder.move_arm(limb, grip[0], grip[1], grip[2], grip_quat_near)
+        # rest
+        folder.move_arm('right', 0.6, -0.6, 0.25, grip_quat_near_right)
+        folder.move_arm('left', 0.6, 0.6, 0.25, grip_quat_near_left)
+        rospy.sleep(2)
+
+        # hover over grip location
+        folder.move_arm(limb, grip[0], grip[1], grip[2] + 0.1, grip_quat_near)
+        rospy.sleep(2)
+
+        # open grip
+        folder.open_grip(limb)
+        rospy.sleep(1)
+        
+        # drop down
+        folder.move_arm(limb, grip[0], grip[1], grip[2] - 0.01, grip_quat_near)
+        rospy.sleep(2)
+        
+        # close grip
+        folder.close_grip(limb)
         rospy.sleep(1)
 
-def main():
-    calibrate_mode = False
-    rospy.init_node('baxter_cloth_folder')
-    if calibrate_mode:
-        folder = ClothFolder()
-        folder.calibrate()
+        # come up a little
+        folder.move_arm(limb, grip[0], grip[1], grip[2] + 0.025, grip_quat_near)
+        rospy.sleep(2)
+
+        # move left gripper in position
+        folder.move_arm('left', grip[0], grip[1] + 0.1, grip[2] + 0.1, grip_quat_diag1_left)
+        folder.open_grip('left')
+        rospy.sleep(2)
+
+        # move left gripper in position closer
+        folder.move_arm('left', grip[0], grip[1] + 0.03, grip[2], grip_quat_diag1_left)
+        folder.close_grip('left')
+        rospy.sleep(2)
+
+        # open right grip
+        folder.open_grip(limb)
+        rospy.sleep(0.1)
+        # come up more
+        folder.move_arm(limb, grip[0], grip[1], grip[2] + 0.1, grip_quat_near_right)
+        rospy.sleep(0.1)
+
+        # reset right
+        folder.move_arm('right', 0.6, -0.6, 0.25, grip_quat_near)
+
+        # move left gripper up a little
+        folder.move_arm('left', grip[0], grip[1], grip[2] + 0.05, grip_quat_diag1_left)
+        folder.move_arm('left', 
+                        (grip[0] + release[0])/2, 
+                        (grip[1] + release[1])/2, 
+                        (grip[2] + release[2])/2 + 0.07,
+                        grip_quat_diag1_left)
+        folder.move_arm('left', release[0], release[1], release[2] + 0.05, grip_quat_diag1_left)
+        rospy.sleep(2)
+        folder.open_grip('left')
+        
+        folder.move_arm('left', release[0], release[1], release[2] + 0.1, grip_quat_diag1_left)
+
+
+        # reset left
+        folder.move_arm('left', 0.6, 0.6, 0.25, grip_quat_near_left)
+
     else:
-        rospy.Subscriber("/vcla/cloth_folding/action", String, callback)
-        rospy.spin()
+        print('right grip action impossible')
+        print('right grip ik', right_grip_ik)
+        print('left grip ik', left_grip_ik)
+
+def main():
+    rospy.init_node('baxter_cloth_folder')
+    rospy.Subscriber("/vcla/cloth_folding/action", String, callback)
+    rospy.spin()
 
 
 if __name__ == '__main__':
