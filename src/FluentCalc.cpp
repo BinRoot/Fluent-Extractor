@@ -58,7 +58,7 @@ vector<float> FluentCalc::calc_width_and_height(CloudPtr cloud, PointT normal) {
 }
 
 
-vector<float> FluentCalc::x_and_y_symmetry(CloudPtr cloud) {
+vector<float> FluentCalc::x_and_y_symmetries(CloudPtr cloud) {
     // Normalize X, Y coordinates  
     float min_x = cloud->points[0].x, min_y = cloud->points[0].y;
     float max_x = cloud->points[0].x, max_y = cloud->points[0].y;
@@ -87,13 +87,13 @@ vector<float> FluentCalc::x_and_y_symmetry(CloudPtr cloud) {
     float x_sym_measure = 0; // x_axis symmetry
     for (int i=0; i<100; i++) {
         for (int j=0; j<50; j++) {
-            x_sym_measure += int(proj(j, i) == proj(i, 99-j));
+            x_sym_measure += int(proj(j, i) != proj(i, 99-j));
         }
     }
     float y_sym_measure = 0; // y_axis symmetry
     for (int i=0; i<100; i++) {
         for (int j=0; j<50; j++) {
-            y_sym_measure += int(proj(i, i) == proj(i, 99-j));
+            y_sym_measure += int(proj(i, i) != proj(i, 99-j));
         }
     }
     x_sym_measure /= 100*100;
@@ -175,3 +175,31 @@ vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
     return fluents;
 }
 
+vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
+    Eigen::Vector4f pcaCentroid;
+    compute3DCentroid(*cloud, pcaCentroid);
+    Eigen::Matrix3f covariance;
+    computeCovarianceMatrixNormalized(*cloud, pcaCentroid, covariance);
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance, Eigen::ComputeEigenvectors);
+    Eigen::Matrix3f eigenVectorsPCA = eigen_solver.eigenvectors();
+    eigenVectorsPCA.col(2) = eigenVectorsPCA.col(0).cross(eigenVectorsPCA.col(1));
+
+    // Transform original cloud to the origin where the principal components correspond to the axes.
+    Eigen::Matrix4f projectionTransform(Eigen::Matrix4f::Identity());
+    projectionTransform.block<3,3>(0,0) = eigenVectorsPCA.transpose();
+    projectionTransform.block<3,1>(0,3) = -1.f * (projectionTransform.block<3,3>(0,0) * pcaCentroid.head<3>());
+    CloudPtr cloudPointsProjected(new pcl::PointCloud<PointT>());
+    transformPointCloud(*cloud, *cloudPointsProjected, projectionTransform);
+
+    // Uncomment this code to see the axises
+    /*
+    pcl::visualization::PCLVisualizer *visu;
+    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
+    visu->addPointCloud(cloudPointsProjected, "bboxedCloud");
+    visu->addCoordinateSystem(0.5);
+    while (!visu->wasStopped ()) {
+        visu->spinOnce(100);
+    }
+    */
+    return FluentCalc::x_and_y_symmetries(cloudPointsProjected);
+}
