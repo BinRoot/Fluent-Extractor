@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 import csv
+import math
 import rospy
 from std_msgs.msg import (
     UInt16,
@@ -36,6 +37,7 @@ def dist_pos(pos_a, pos_b):
 grip_quat_near_right = Quaternion(x=-0.166755840964, y=0.984408007754, z=0.0474837929061, w=0.0296420847001)
 grip_quat_near_left = Quaternion(x=0.138610321149, y=0.989974768164, z=0.00934995996438, w=0.0254895177964)
 grip_quat_diag1_left = Quaternion(x=-0.0272329635807, y=0.939143659652, z=-0.330272832324, w=0.0904842995141)
+grip_quat_diag1_right = Quaternion(x=0.00388033002546, y=0.939712736087, z=0.335003571924, w=0.0681347991566)
 
 class ClothFolder(object):
 
@@ -412,7 +414,7 @@ class ClothFolder(object):
             grip_right.open()
             rospy.sleep(0.01)
             sleep_count += 1
-            if sleep_count > 10:
+            if sleep_count > 100:
                 break
 
     def open_grips(self):
@@ -426,6 +428,86 @@ class ClothFolder(object):
             sleep_count += 1
             if sleep_count > 10:
                 break
+
+    def fold_fancy(self, limb, grip, release):
+        if limb == 'right':
+            other_limb = 'left'
+            quat_limb = grip_quat_near_right
+            quat_other_limb = grip_quat_near_left
+            quatd_limb = grip_quat_diag1_right
+            quatd_other_limb = grip_quat_diag1_left
+        else:
+            other_limb = 'right'
+            quat_limb = grip_quat_near_left
+            quat_other_limb = grip_quat_near_right
+            quatd_limb = grip_quat_diag1_left
+            quatd_other_limb = grip_quat_diag1_right
+
+        print('gripping hand: {}, helping hand: {}'.format(limb, other_limb))
+
+        # rest
+        self.move_arm('right', 0.6, -0.6, 0.25, grip_quat_near_right)
+        self.move_arm('left', 0.6, 0.6, 0.25, grip_quat_near_left)
+        rospy.sleep(2)
+
+        # hover over grip location
+        self.move_arm(other_limb, grip[0], grip[1], grip[2] + 0.1, quat_other_limb)
+        rospy.sleep(2)
+        # open grip
+        self.open_grip(other_limb)
+        rospy.sleep(0.1)
+        # drop down
+        self.move_arm(other_limb, grip[0], grip[1], grip[2] - 0.01, quat_other_limb)
+        rospy.sleep(2)
+        # close grip
+        self.close_grip(other_limb)
+        rospy.sleep(1)
+        # come up a little
+        self.move_arm(other_limb, grip[0], grip[1], grip[2] + 0.025, quat_other_limb)
+        rospy.sleep(1)
+        
+        # move gripper in position
+        y_offset = 0.1 if limb == 'left' else -0.1
+        self.move_arm(limb, grip[0], grip[1] + y_offset, grip[2] + 0.1, quatd_limb)
+        self.open_grip(limb)
+        rospy.sleep(2)
+        # move gripper in position closer
+        y_offset2 = 0.015 if limb == 'left' else -0.015
+        self.move_arm(limb, grip[0], grip[1] + y_offset2, grip[2] + 0.005, quatd_limb)
+        self.close_grip(limb)
+        rospy.sleep(2)
+
+        # open right grip
+        self.open_grip(other_limb)
+        rospy.sleep(0.1)
+        # come up more
+        self.move_arm(other_limb, grip[0], grip[1], grip[2] + 0.1, quat_other_limb)
+        rospy.sleep(0.1)
+
+        # reset helper
+        if other_limb == 'right':
+            self.move_arm('right', 0.6, -0.6, 0.25, grip_quat_near_right)
+        else:
+            self.move_arm('left', 0.6, 0.6, 0.25, grip_quat_near_left)
+
+        # move left gripper up a little
+        self.move_arm(limb, grip[0], grip[1], grip[2] + 0.05, quatd_limb)
+        self.move_arm(limb, 
+                        (grip[0] + release[0])/2, 
+                        (grip[1] + release[1])/2, 
+                        (grip[2] + release[2])/2 + 0.07,
+                        quatd_limb)
+        self.move_arm(limb, release[0], release[1], release[2] + 0.05, quatd_limb)
+        rospy.sleep(1)
+        self.open_grip(limb)
+        self.move_arm(limb, release[0], release[1], release[2] + 0.1, quatd_limb)
+
+        # reset grip
+        if limb == 'right':
+            self.move_arm('right', 0.6, -0.6, 0.25, grip_quat_near_right)
+        else:
+            self.move_arm('left', 0.6, 0.6, 0.25, grip_quat_near_left)
+
 
 
     def fold2(self, grip1, release1, grip2, release2):
@@ -475,6 +557,8 @@ class ClothFolder(object):
         self.rest('right')
         self.rest('left')
 
+
+
 # grip [0.493987,0.209845,0.16986],
 # release [0.968917,-0.148964,0.164326],
 # grip2 [0.517411,-0.137215,0.164335],
@@ -502,77 +586,17 @@ def callback(data):
     pos_right_arr = [pos_right.x, pos_right.y, pos_right.z]
     pos_left_arr = [pos_left.x, pos_left.y, pos_left.z]
 
-    limb = None
-    if right_grip_ik:
-        limb = 'right'
-        grip_quat_near = grip_quat_near_right
-        print('gripping at', grip)
-        # rest
-        folder.move_arm('right', 0.6, -0.6, 0.25, grip_quat_near_right)
-        folder.move_arm('left', 0.6, 0.6, 0.25, grip_quat_near_left)
-        rospy.sleep(2)
+    # which arm is closer to the grip point
+    dist_to_right = math.sqrt(math.pow(pos_right[0] - grip[0], 2) + 
+                              math.pow(pos_right[1] - grip[1], 2) + 
+                              math.pow(pos_right[2] - grip[2], 2))
 
-        # hover over grip location
-        folder.move_arm(limb, grip[0], grip[1], grip[2] + 0.1, grip_quat_near)
-        rospy.sleep(2)
+    dist_to_left = math.sqrt(math.pow(pos_left[0] - grip[0], 2) + 
+                             math.pow(pos_left[1] - grip[1], 2) + 
+                             math.pow(pos_left[2] - grip[2], 2))
 
-        # open grip
-        folder.open_grip(limb)
-        rospy.sleep(1)
-        
-        # drop down
-        folder.move_arm(limb, grip[0], grip[1], grip[2] - 0.01, grip_quat_near)
-        rospy.sleep(2)
-        
-        # close grip
-        folder.close_grip(limb)
-        rospy.sleep(1)
-
-        # come up a little
-        folder.move_arm(limb, grip[0], grip[1], grip[2] + 0.025, grip_quat_near)
-        rospy.sleep(2)
-
-        # move left gripper in position
-        folder.move_arm('left', grip[0], grip[1] + 0.1, grip[2] + 0.1, grip_quat_diag1_left)
-        folder.open_grip('left')
-        rospy.sleep(2)
-
-        # move left gripper in position closer
-        folder.move_arm('left', grip[0], grip[1] + 0.03, grip[2], grip_quat_diag1_left)
-        folder.close_grip('left')
-        rospy.sleep(2)
-
-        # open right grip
-        folder.open_grip(limb)
-        rospy.sleep(0.1)
-        # come up more
-        folder.move_arm(limb, grip[0], grip[1], grip[2] + 0.1, grip_quat_near_right)
-        rospy.sleep(0.1)
-
-        # reset right
-        folder.move_arm('right', 0.6, -0.6, 0.25, grip_quat_near)
-
-        # move left gripper up a little
-        folder.move_arm('left', grip[0], grip[1], grip[2] + 0.05, grip_quat_diag1_left)
-        folder.move_arm('left', 
-                        (grip[0] + release[0])/2, 
-                        (grip[1] + release[1])/2, 
-                        (grip[2] + release[2])/2 + 0.07,
-                        grip_quat_diag1_left)
-        folder.move_arm('left', release[0], release[1], release[2] + 0.05, grip_quat_diag1_left)
-        rospy.sleep(2)
-        folder.open_grip('left')
-        
-        folder.move_arm('left', release[0], release[1], release[2] + 0.1, grip_quat_diag1_left)
-
-
-        # reset left
-        folder.move_arm('left', 0.6, 0.6, 0.25, grip_quat_near_left)
-
-    else:
-        print('right grip action impossible')
-        print('right grip ik', right_grip_ik)
-        print('left grip ik', left_grip_ik)
+    limb = 'right' if dist_to_right < dist_to_left else 'left'
+    folder.fold_fancy(limb, grip, release)
 
 def main():
     rospy.init_node('baxter_cloth_folder')

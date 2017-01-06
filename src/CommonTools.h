@@ -349,6 +349,9 @@ public:
 
     }
 
+    static void grab_cut_segmentation(cv::Mat& img, cv::Rect& box, cv::Mat& mask) {
+      // TODO
+    }
 
     static void repel_grip_point(cv::Point line_p1, cv::Point line_p2, cv::Mat cloth_mask, cv::Point& grip_point) {
         double dist1 = distance_to_line(line_p1, line_p2, grip_point);
@@ -1040,15 +1043,19 @@ public:
         return true;
     }
 
-    static CloudPtr get_pointcloud_from_mask(CloudPtr cloud_ptr, int* pixel2voxel, cv::Mat mask) {
+    static CloudPtr get_pointcloud_from_mask(CloudPtr cloud_ptr, int* pixel2voxel, cv::Mat mask, bool dense=false) {
         CloudPtr mask_cloud_ptr = CloudPtr(new Cloud);
+        PointT dummy_point;
+        dummy_point.x = 0;
+        dummy_point.y = 0;
+        dummy_point.z = -999;
         for (int i = 0; i < mask.size().area(); i++) {
             if (mask.at<uchar>(i) == 255) {
                 if (pixel2voxel[i] >= 0) {
                   PointT p = cloud_ptr->at(pixel2voxel[i]);
                   mask_cloud_ptr->push_back(p);
-                }
-            }
+                } else if (dense) mask_cloud_ptr->push_back(dummy_point);
+            } else if (dense) mask_cloud_ptr->push_back(dummy_point);
         }
         return mask_cloud_ptr;
     }

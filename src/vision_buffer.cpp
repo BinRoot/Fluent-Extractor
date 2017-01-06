@@ -3,6 +3,8 @@
 #include <pcl/visualization/cloud_viewer.h>
 
 #include "ros/ros.h"
+#include "ros/package.h"
+
 #include "FileFrameScanner.h"
 #include "CommonTools.h"
 
@@ -12,6 +14,9 @@
 #include <iostream>
 #include "rapidjson/filereadstream.h"
 #include "Seg2D.h"
+
+#include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
 
 #include <cstdio>
 #include "pcl_ros/point_cloud.h"
@@ -23,8 +28,9 @@ using namespace rapidjson;
 
 class BufferManager {
 public:
-  BufferManager(int vid_idx, ros::Publisher& pub) {
+  BufferManager(int vid_idx, ros::Publisher& pub, ros::Publisher& xdisplay_pub) {
     m_vid_idx = vid_idx;
+    m_xdisplay_pub = xdisplay_pub;
     m_pub = pub;
   }
 
@@ -33,12 +39,14 @@ public:
       CommonTools::find_biggest_plane(cloud_ptr->makeShared(), voxel2pixel, img_bgr.size(), m_table_mask, m_table_midpoint, m_table_normal);
       cout << "table midpoint is " << m_table_midpoint << endl;
       cout << "table normal is " << m_table_normal << endl;
+      imshow("table", m_table_mask);
+      waitKey(100);
     }
 
     Mat cloth_mask;
     if (m_table_mask.size().area() > 0) {
-      CloudPtr table_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr->makeShared(), pixel2voxel, m_table_mask);
-//      viewer.showCloud(table_cloud_ptr);
+      CloudPtr table_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr->makeShared(), pixel2voxel, m_table_mask, true);
+
 
       // no obstacles allowed
       double max_dist_from_table = 0;
@@ -49,21 +57,31 @@ public:
             m_table_normal.y * m_table_midpoint.y -
             m_table_normal.z * m_table_midpoint.z;
         double dist_from_table = m_table_normal.x * p.x + m_table_normal.y * p.y + m_table_normal.z * p.z + d;
+        if (dist_from_table > 50) continue;  // unreasonable
         if (dist_from_table > max_dist_from_table) {
           max_dist_from_table = dist_from_table;
           max_dist_vox_idx = i;
         }
       }
-      if (max_dist_from_table > 0.1) {
-        cout << "detected obstacle" << endl;
+      if (max_dist_from_table > 0.15) {
+        cout << "detected obstacle at distance " << max_dist_from_table << endl;
         int obstacle_row, obstacle_col;
         CommonTools::vox2pix(voxel2pixel, max_dist_vox_idx, obstacle_row, obstacle_col, cloud_ptr->width);
         Mat img_with_circle = img_bgr.clone();
         Point p;
-        p.x = obstacle_row;
-        p.y = obstacle_col;
+        p.x = obstacle_col;
+        p.y = obstacle_row;
         circle(img_with_circle, p, 10, Scalar(0, 0, 255), 3);
         imshow("Obstacle detected", img_with_circle);
+        resize(img_with_circle, img_with_circle, cv::Size(), 1.5, 1.5);
+        Mat xdisplay_img = Mat::zeros(800, 1024, CV_8UC3);
+
+        img_with_circle.copyTo(xdisplay_img(cv::Rect(128, 0, img_with_circle.cols, img_with_circle.rows)));
+
+        cout << "img size " << img_with_circle.size[0] << " x " << img_with_circle.size[1] << endl;
+
+        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
+        m_xdisplay_pub.publish(*msg);
         waitKey(100);
         return;
       }
@@ -116,11 +134,11 @@ public:
         if (semantic_dist_to_table < 0.4) continue;
 
         // component size should not be bigger than table
-        if (components[i].size() > 0.9 * table_2d_area) {
+        if (components[i].size() > 0.95 * table_2d_area) {
           continue;
         }
 
-        // eroding it shouldn't make it dissapear
+        // eroding it shouldn't make it disappear
         Mat eroded_component = component_img.clone();
         CommonTools::erode(eroded_component, 10);
         if (cv::countNonZero(eroded_component) < 10) {
@@ -152,6 +170,10 @@ public:
     }
 
     if (cloth_mask.size().area() > 0) {
+      // save cloth_mask to file
+      String path = ros::package::getPath("fluent_extractor") + "/cloth.png";
+      imwrite(path, cloth_mask);
+
       CloudPtr cloth_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr, pixel2voxel, cloth_mask);
 
       stringstream payload;
@@ -166,7 +188,6 @@ public:
       cloth_cloud_ptr->header.frame_id = payload.str();
 
       m_pub.publish(cloth_cloud_ptr);
-      waitKey(0);
     } else {
       cout << "no cloth found" << endl;
     }
@@ -188,6 +209,7 @@ public:
   }
 private:
   ros::Publisher m_pub;
+  ros::Publisher m_xdisplay_pub;
   int m_vid_idx;
   Mat m_table_mask;
   PointT m_table_midpoint, m_table_normal;
@@ -208,7 +230,8 @@ int main(int argc, char **argv) {
   json.ParseStream(is);
 
   ros::Publisher pub = node_handle.advertise<Cloud>("vision_buffer_pcl", 1);
-  BufferManager buffer_manager(json["vid_idx"].GetInt(), pub);
+  ros::Publisher xdisplay_pub = node_handle.advertise<sensor_msgs::Image>("/robot/xdisplay", 1);
+  BufferManager buffer_manager(json["vid_idx"].GetInt(), pub, xdisplay_pub);
 
   if (json["use_kinect"].GetBool()) {
     std::string kinect_topic = node_handle.resolveName(json["kinect_topic"].GetString());

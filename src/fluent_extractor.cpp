@@ -2,6 +2,7 @@
 #include <opencv2/opencv.hpp>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/io/pcd_io.h>
+#include <std_msgs/String.h>
 
 #include "CommonTools.h"
 #include "FluentCalc.h"
@@ -12,7 +13,8 @@ using namespace cv;
 
 class CloudAnalyzer {
 public:
-  CloudAnalyzer() {
+  CloudAnalyzer(ros::Publisher& pub) {
+    m_pub = pub;
     m_outfile.open("train.dat", std::ios_base::app);
     m_step_number = 1;
     m_pcd_filename_idx = 1;
@@ -54,9 +56,13 @@ public:
     vector<float> bbox_fluents = m_fluent_calc.calc_bbox(cloud_const_ptr->makeShared());
     fluent_vector.insert(fluent_vector.end(), bbox_fluents.begin(), bbox_fluents.end());
 
+    // Compute symmetry fluents
+    vector<float> symmetry_fluents = m_fluent_calc.principal_symmetries(cloud_const_ptr->makeShared());
+    fluent_vector.insert(fluent_vector.end(), symmetry_fluents.begin(), symmetry_fluents.end());
+
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
-//    cout << "dist from prev fluent: " << dist << endl;
-    if (dist > 0.05) {
+    cout << "dist from prev fluent: " << dist << endl;
+    if (dist > 0.5) {
       cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
       //-- save pcd
 //      stringstream pcd_filename;
@@ -66,6 +72,7 @@ public:
 
       save_fluent_vector(fluent_vector);
       print_fluent_vector(fluent_vector);
+      publish_fluent_vector(fluent_vector);
 
       m_prev_fluent_vector = fluent_vector;
     }
@@ -79,6 +86,7 @@ private:
   int m_step_number;
   int m_vid_idx;
   int m_pcd_filename_idx;
+  ros::Publisher m_pub;
   
   void print_fluent_vector(std::vector<float> fluent_vector) {
     for (int i = 0; i < fluent_vector.size(); i++) {
@@ -107,6 +115,16 @@ private:
     m_outfile << endl;
     m_outfile.flush();
   }
+
+  void publish_fluent_vector(std::vector<float> fluent_vector) {
+    stringstream fluents_str;
+    for (int i = 0; i < fluent_vector.size(); i++) {
+      fluents_str << (i + 1) << ":" << fluent_vector[i] << " ";
+    }
+    std_msgs::String msg;
+    msg.data = fluents_str.str();
+    m_pub.publish(msg);
+  }
 };
 
 
@@ -114,9 +132,11 @@ private:
 int main(int argc, char **argv) {
   ros::init(argc, argv, "fluent_extractor");
 
-  CloudAnalyzer cloud_analyzer;
-
   ros::NodeHandle node_handle;
+  ros::Publisher pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/fluent_vector", 1000);
+
+  CloudAnalyzer cloud_analyzer(pub);
+
   ros::Subscriber sub = node_handle.subscribe<Cloud>("vision_buffer_pcl", 1, &CloudAnalyzer::callback, &cloud_analyzer);
 
 

@@ -149,28 +149,27 @@ vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
 
     // Uncomment this code to see how well the bounding box fits.
 
-    pcl::visualization::PCLVisualizer *visu;
-    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
-
-    CloudPtr corners(new pcl::PointCloud<PointT>()); 
-    PointT corner_1, corner_2;
-    corner_1.x = boxCorner_1[0]; corner_1.y = boxCorner_1[1]; corner_1.z = boxCorner_1[2];
-    corner_2.x = boxCorner_2[0]; corner_2.y = boxCorner_2[1]; corner_2.z = boxCorner_2[2];
-    corners->push_back(corner_1);
-    corners->push_back(corner_2);
-    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> c1 (cloud, 0, 255, 0);
-    pcl::visualization::PointCloudColorHandlerCustom<PointT> c2 (corners, 255, 0, 0);
-    visu->addPointCloud(cloud, c1, "bboxedCloud");
-    visu->addPointCloud(corners, c2, "corners");
-    visu->addCube(bboxTransform, bboxQuaternion, xSize, ySize, zSize, "bbox");
-
-    stringstream filename;
-
-    filename << "out/fluent_" << time(0) << ".png";
-
-    while (!visu->wasStopped ()) {
-        visu->spinOnce(200);
-    }
+//    pcl::visualization::PCLVisualizer *visu;
+//    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
+//
+//    CloudPtr corners(new pcl::PointCloud<PointT>());
+//    PointT corner_1, corner_2;
+//    corner_1.x = boxCorner_1[0]; corner_1.y = boxCorner_1[1]; corner_1.z = boxCorner_1[2];
+//    corner_2.x = boxCorner_2[0]; corner_2.y = boxCorner_2[1]; corner_2.z = boxCorner_2[2];
+//    corners->push_back(corner_1);
+//    corners->push_back(corner_2);
+//    pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> c1 (cloud, 0, 255, 0);
+//    pcl::visualization::PointCloudColorHandlerCustom<PointT> c2 (corners, 255, 0, 0);
+//    visu->addPointCloud(cloud, c1, "bboxedCloud");
+//    visu->addPointCloud(corners, c2, "corners");
+//    visu->addCube(bboxTransform, bboxQuaternion, xSize, ySize, zSize, "bbox");
+//
+//    stringstream filename;
+//    filename << "out/fluent_" << time(0) << ".png";
+//
+//    while (!visu->wasStopped ()) {
+//        visu->spinOnce(200);
+//    }
 
     return fluents;
 }
@@ -192,14 +191,13 @@ vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
     transformPointCloud(*cloud, *cloudPointsProjected, projectionTransform);
 
     // Uncomment this code to see the axises
-    /*
-    pcl::visualization::PCLVisualizer *visu;
-    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
-    visu->addPointCloud(cloudPointsProjected, "bboxedCloud");
-    visu->addCoordinateSystem(0.5);
-    while (!visu->wasStopped ()) {
-        visu->spinOnce(100);
-    }
-    */
+//    pcl::visualization::PCLVisualizer *visu;
+//    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
+//    visu->addPointCloud(cloudPointsProjected, "bboxedCloud");
+//    visu->addCoordinateSystem(0.5);
+//    while (!visu->wasStopped ()) {
+//        visu->spinOnce(100);
+//    }
+
     return FluentCalc::x_and_y_symmetries(cloudPointsProjected);
 }
