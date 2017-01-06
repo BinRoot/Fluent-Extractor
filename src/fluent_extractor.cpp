@@ -20,7 +20,58 @@ public:
     m_pcd_filename_idx = 1;
   }
 
+  void clip_to_bounds(int& x, int min_val, int max_val) {
+    if (x < min_val) {
+      x = min_val;
+    } else if (x > max_val) {
+      x = max_val;
+    }
+  }
+
+  Mat get_image_from_cloud(const CloudConstPtr& cloud_const_ptr) {
+    vector<cv::Point2f> points;
+    float x_min = std::numeric_limits<float>::infinity();
+    float y_min = std::numeric_limits<float>::infinity();
+    float x_max = 0;
+    float y_max = 0;
+
+
+    for (int i = 0; i < cloud_const_ptr->size(); i++) {
+      PointT p = cloud_const_ptr->at(i);
+      if (p.x < x_min) x_min = p.x;
+      if (p.x > x_max) x_max = p.x;
+      if (p.y < y_min) y_min = p.y;
+      if (p.y > y_max) y_max = p.y;
+
+      cv::Point2f p2;
+      p2.x = p.x;
+      p2.y = p.y;
+      points.push_back(p2);
+    }
+
+    float scale_x = x_max - x_min;
+    float scale_y = y_max - y_min;
+    cout << "scale x: " << scale_x << ", scale_y: " << scale_y << endl;
+
+    float mask_width = 256;
+    float mask_height = mask_width * (scale_y / scale_x);
+    cout << "mask width: " << mask_width << ", mask_height: " << mask_height << endl;
+    Mat cloud_mask_raw = Mat::zeros(mask_height, mask_width, CV_8U);
+    for (int i = 0; i < points.size(); i++) {
+      int x = mask_width * (points[i].x - x_min) / scale_x;
+      clip_to_bounds(x, 0, int(mask_width) - 1);
+      int y = mask_height * (points[i].y - y_min) / scale_y;
+      clip_to_bounds(y, 0, int(mask_height) - 1);
+      cloud_mask_raw.at<uchar>(y, x) = 255;
+    }
+    return cloud_mask_raw;
+  }
+
   void callback(const CloudConstPtr& cloud_const_ptr) {
+    cout << "cloud size: " << cloud_const_ptr->size() << endl;
+    Mat img = get_image_from_cloud(cloud_const_ptr);
+    imshow("extractoring fluents of", img);
+    waitKey(20);
     
     std::vector<float> fluent_vector;
 
@@ -62,7 +113,9 @@ public:
 
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
     cout << "dist from prev fluent: " << dist << endl;
-    if (dist > 0.5) {
+    publish_fluent_vector(fluent_vector);
+
+    if (dist > 0.3) {
       cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
       //-- save pcd
 //      stringstream pcd_filename;
@@ -72,7 +125,6 @@ public:
 
       save_fluent_vector(fluent_vector);
       print_fluent_vector(fluent_vector);
-      publish_fluent_vector(fluent_vector);
 
       m_prev_fluent_vector = fluent_vector;
     }
@@ -133,7 +185,7 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "fluent_extractor");
 
   ros::NodeHandle node_handle;
-  ros::Publisher pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/fluent_vector", 1000);
+  ros::Publisher pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/fluent_vector", 1);
 
   CloudAnalyzer cloud_analyzer(pub);
 

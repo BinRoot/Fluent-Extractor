@@ -78,8 +78,6 @@ public:
 
         img_with_circle.copyTo(xdisplay_img(cv::Rect(128, 0, img_with_circle.cols, img_with_circle.rows)));
 
-        cout << "img size " << img_with_circle.size[0] << " x " << img_with_circle.size[1] << endl;
-
         sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
         m_xdisplay_pub.publish(*msg);
         waitKey(100);
@@ -89,7 +87,7 @@ public:
 
       Mat img_masked;
       img_bgr.copyTo(img_masked, m_table_mask);
-      Mat img_seg = m_seg2D.seg(img_masked, 0.5, 1000, 50);
+      Mat img_seg = m_seg2D.seg(img_masked, 0.5, 2000, 50);
 
 
       imshow("img_seg", img_seg);
@@ -131,7 +129,7 @@ public:
         Mat component_img_hull = component_img.clone();
         drawContours(component_img_hull, hulls, 0, Scalar(255), -1);
         double semantic_dist_to_table = CommonTools::shape_dist(table_mask_eroded, component_img_hull);
-        if (semantic_dist_to_table < 0.4) continue;
+        if (semantic_dist_to_table < 0.2) continue;
 
         // component size should not be bigger than table
         if (components[i].size() > 0.95 * table_2d_area) {
@@ -154,7 +152,6 @@ public:
 
 
       if (max_component_size > 0) {
-        imshow("cloth", max_component_img);
         stringstream cloth_filename;
         cloth_filename << "out/cloth_mask_" << img_idx << ".png";
         imwrite(cloth_filename.str(), max_component_img);
@@ -170,6 +167,17 @@ public:
     }
 
     if (cloth_mask.size().area() > 0) {
+      // try grabcut on cloth_mask
+      cloth_mask = CommonTools::grab_cut_segmentation(img_bgr, cloth_mask);
+
+      CommonTools::dilate_erode(cloth_mask, 1);
+      CommonTools::dilate_erode(cloth_mask, 2);
+      CommonTools::dilate_erode(cloth_mask, 3);
+      CommonTools::draw_contour(cloth_mask, cloth_mask.clone(), cv::Scalar(255));
+
+      imshow("cloth", cloth_mask);
+
+
       // save cloth_mask to file
       String path = ros::package::getPath("fluent_extractor") + "/cloth.png";
       imwrite(path, cloth_mask);

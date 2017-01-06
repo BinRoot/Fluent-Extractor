@@ -349,8 +349,55 @@ public:
 
     }
 
-    static void grab_cut_segmentation(cv::Mat& img, cv::Rect& box, cv::Mat& mask) {
-      // TODO
+    static cv::Mat grab_cut_segmentation(cv::Mat& img, cv::Mat& mask) {
+      cv::Mat bg_model, fg_model;
+      cv::Mat result = mask.clone();
+      CommonTools::erode(result, 10);
+      result = (result / 255) * cv::GC_PR_FGD;
+
+      cv::Mat background = mask.clone();
+      CommonTools::dilate(background, 5);
+      cv::threshold(background,background,1, cv::GC_PR_BGD,cv::THRESH_BINARY_INV);
+      result += background;
+
+      /* set more probable foreground */
+      for (int i = 0; i < result.size().area(); i++) {
+        if (result.at<uchar>(i) == 0) {
+          result.at<uchar>(i) = cv::GC_PR_BGD;
+        }
+      }
+
+      /* set confident background on corners */
+      int rs = 50;
+      result(cv::Rect(0, 0, rs, rs)).setTo(cv::Scalar(cv::GC_BGD));
+      result(cv::Rect(0, result.rows-rs, rs, rs)).setTo(cv::Scalar(cv::GC_BGD));
+      result(cv::Rect(result.cols-rs, 0, rs, rs)).setTo(cv::Scalar(cv::GC_BGD));
+      result(cv::Rect(result.cols-rs, result.rows-rs, rs, rs)).setTo(cv::Scalar(cv::GC_BGD));
+
+      cv::imshow("img with probable FG, probable BG, & confident BG", result*80);
+      cv::waitKey(20);
+
+
+      cv::Rect box = CommonTools::get_outer_rect(mask);
+      /* GrabCut Segmentation */
+      grabCut(img,                  // input image
+              result,               // segmentation result
+              box,                  // rectangle containing foreground
+              bg_model, fg_model,   // models
+              1,                    // number of iterations
+              cv::GC_INIT_WITH_MASK);   // use mask
+
+      /* get the pixels marked as likely foreground */
+      cv::Mat result_pf;
+      compare(result, cv::GC_PR_FGD, result_pf, cv::CMP_EQ);
+
+      /* generate output image */
+//      cv::imshow("grabcut result_pf", result_pf);
+//      cv::waitKey(20);
+      std::vector<cv::Point> pts;
+      CommonTools::max_contour(result_pf, pts, result_pf);
+
+      return result_pf;
     }
 
     static void repel_grip_point(cv::Point line_p1, cv::Point line_p2, cv::Mat cloth_mask, cv::Point& grip_point) {
