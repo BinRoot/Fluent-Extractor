@@ -17,6 +17,8 @@
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/segmentation/region_growing_rgb.h>
 #include <pcl/segmentation/min_cut_segmentation.h>
+#include <pcl/common/transforms.h>
+
 
 #define BOOST_NO_CXX11_SCOPED_ENUMS
 #include <boost/filesystem.hpp>
@@ -419,6 +421,29 @@ public:
         }
     }
 
+
+    static Eigen::Matrix4f get_projection_transform(CloudPtr cloud) {
+      Eigen::Vector4f pcaCentroid;
+      compute3DCentroid(*cloud, pcaCentroid);
+      Eigen::Matrix3f covariance;
+      computeCovarianceMatrixNormalized(*cloud, pcaCentroid, covariance);
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance, Eigen::ComputeEigenvectors);
+      Eigen::Matrix3f eigenVectorsPCA = eigen_solver.eigenvectors();
+      eigenVectorsPCA.col(2) = eigenVectorsPCA.col(0).cross(eigenVectorsPCA.col(1));
+
+      // Transform original cloud to the origin where the principal components correspond to the axes.
+      Eigen::Matrix4f projectionTransform(Eigen::Matrix4f::Identity());
+      projectionTransform.block<3,3>(0,0) = eigenVectorsPCA.transpose();
+      projectionTransform.block<3,1>(0,3) = -1.f * (projectionTransform.block<3,3>(0,0) * pcaCentroid.head<3>());
+
+      return projectionTransform;
+    }
+
+    static CloudPtr transform3d(CloudPtr cloud, Eigen::Matrix4f transform) {
+        CloudPtr cloudPointsProjected(new pcl::PointCloud<PointT>());
+        transformPointCloud(*cloud, *cloudPointsProjected, transform);
+        return cloudPointsProjected;
+    }
 
     static void attract_grip_point(cv::Point line_p1, cv::Point line_p2, cv::Mat cloth_mask, cv::Point& grip_point) {
         double dist1 = distance_to_line(line_p1, line_p2, grip_point);

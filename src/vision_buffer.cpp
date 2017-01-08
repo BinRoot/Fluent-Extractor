@@ -196,6 +196,8 @@ public:
       cloth_cloud_ptr->header.frame_id = payload.str();
 
       m_pub.publish(cloth_cloud_ptr);
+
+      waitKey(0);
     } else {
       cout << "no cloth found" << endl;
     }
@@ -257,6 +259,7 @@ int main(int argc, char **argv) {
     int img_idx = json["start_frame_idx"].GetInt();
 
     while(scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
+      if (!ros::ok()) break;
       int pixel2voxel[img_bgr.size().area()];
       int voxel2pixel[img_bgr.size().area()];
       CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);

@@ -175,20 +175,8 @@ vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
 }
 
 vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
-    Eigen::Vector4f pcaCentroid;
-    compute3DCentroid(*cloud, pcaCentroid);
-    Eigen::Matrix3f covariance;
-    computeCovarianceMatrixNormalized(*cloud, pcaCentroid, covariance);
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance, Eigen::ComputeEigenvectors);
-    Eigen::Matrix3f eigenVectorsPCA = eigen_solver.eigenvectors();
-    eigenVectorsPCA.col(2) = eigenVectorsPCA.col(0).cross(eigenVectorsPCA.col(1));
-
-    // Transform original cloud to the origin where the principal components correspond to the axes.
-    Eigen::Matrix4f projectionTransform(Eigen::Matrix4f::Identity());
-    projectionTransform.block<3,3>(0,0) = eigenVectorsPCA.transpose();
-    projectionTransform.block<3,1>(0,3) = -1.f * (projectionTransform.block<3,3>(0,0) * pcaCentroid.head<3>());
-    CloudPtr cloudPointsProjected(new pcl::PointCloud<PointT>());
-    transformPointCloud(*cloud, *cloudPointsProjected, projectionTransform);
+    Eigen::Matrix4f projectionTransform = CommonTools::get_projection_transform(cloud);
+    CloudPtr cloudPointsProjected = CommonTools::transform3d(cloud, projectionTransform);
 
     // Uncomment this code to see the axises
 //    pcl::visualization::PCLVisualizer *visu;
