@@ -178,6 +178,14 @@ vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
     Eigen::Matrix4f projectionTransform = CommonTools::get_projection_transform(cloud);
     CloudPtr cloudPointsProjected = CommonTools::transform3d(cloud, projectionTransform);
 
+    // Rotate the point cloud to let XY-axises to be the principal axises
+    for (int i=0; i<cloud->points.size(); i++) {
+        float tmp = cloudPointsProjected->points[i].x;
+        cloudPointsProjected->points[i].x = cloudPointsProjected->points[i].y;
+        cloudPointsProjected->points[i].y = cloudPointsProjected->points[i].z;
+        cloudPointsProjected->points[i].z = tmp;
+    }
+
     // Uncomment this code to see the axises
 //    pcl::visualization::PCLVisualizer *visu;
 //    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
