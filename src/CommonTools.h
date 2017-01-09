@@ -435,6 +435,12 @@ public:
       Eigen::Matrix4f projectionTransform(Eigen::Matrix4f::Identity());
       projectionTransform.block<3,3>(0,0) = eigenVectorsPCA.transpose();
       projectionTransform.block<3,1>(0,3) = -1.f * (projectionTransform.block<3,3>(0,0) * pcaCentroid.head<3>());
+     
+      // Add a rotation s.t. the first three principal components lies on x, y, z respectively 
+      Eigen::Matrix4f rotation;
+      rotation.setZero();
+      rotation(2,0) = 1; rotation(1,1) = 1; rotation(0,2) = 1;
+      projectionTransform  = rotation * projectionTransform;
 
       return projectionTransform;
     }
