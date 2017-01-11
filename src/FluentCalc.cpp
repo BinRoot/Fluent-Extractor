@@ -4,6 +4,7 @@
 #include <pcl/common/common.h>
 #include <pcl/visualization/pcl_visualizer.h>
 
+using namespace cv;
 using namespace std;
 
 vector<float> FluentCalc::calc_thickness(CloudPtr cloud, PointT table_normal, PointT table_midpoint) {
@@ -58,7 +59,7 @@ vector<float> FluentCalc::calc_width_and_height(CloudPtr cloud, PointT normal) {
 }
 
 
-vector<float> FluentCalc::x_and_y_symmetries(CloudPtr cloud) {
+vector<float> FluentCalc::x_and_y_symmetries(CloudPtr cloud, Mat& img) {
     // Normalize X, Y coordinates  
     float min_x = cloud->points[0].x, min_y = cloud->points[0].y;
     float max_x = cloud->points[0].x, max_y = cloud->points[0].y;
@@ -79,22 +80,31 @@ vector<float> FluentCalc::x_and_y_symmetries(CloudPtr cloud) {
 
     // Drop Z coordinate and project onto X-Y plain
     Eigen::MatrixXd proj(100, 100);
+    img = cv::Mat::zeros(100, 100, CV_8U);
     proj.setZero();
     for (int i=0; i<normalized_points.size(); i++) {
         proj(int(normalized_points[i].y * 99), int(normalized_points[i].x * 99)) = 1;
+        img.at<uchar>(int(normalized_points[i].y * 99), int(normalized_points[i].x * 99)) = 255;
     }
 
+
+    cv::GaussianBlur(img, img, cv::Size(15, 15), 1, 1);
+    cv::threshold(img, img, 10, 255, CV_THRESH_BINARY);
+    CommonTools::draw_contour(img, img.clone(), cv::Scalar(255));
+
     // Compute symmetry measures by pixel-wise comparision
+
     float x_sym_measure = 0; // x_axis symmetry
-    for (int i=0; i<100; i++) {
-        for (int j=0; j<50; j++) {
-            x_sym_measure += int(proj(j, i) != proj(i, 99-j));
+    for (int row = 0; row < 50; row++) {
+        for (int col = 0; col < 100; col++) {
+            x_sym_measure += int(img.at<uchar>(row, col) == img.at<uchar>(100 - row - 1, col));
         }
     }
+
     float y_sym_measure = 0; // y_axis symmetry
-    for (int i=0; i<100; i++) {
-        for (int j=0; j<50; j++) {
-            y_sym_measure += int(proj(i, i) != proj(i, 99-j));
+    for (int row = 0; row < 100; row++) {
+        for (int col = 0; col < 50; col++) {
+            y_sym_measure += int(img.at<uchar>(row, col) == img.at<uchar>(row, 100 - col - 1));
         }
     }
     x_sym_measure /= 100*100;
@@ -103,8 +113,7 @@ vector<float> FluentCalc::x_and_y_symmetries(CloudPtr cloud) {
     vector<float> fluents;
     fluents.push_back(x_sym_measure);
     fluents.push_back(y_sym_measure);
-    cout << "x sym: " << x_sym_measure << endl;
-    cout << "y sym: " << y_sym_measure << endl;
+
     return fluents;
 }
 
@@ -181,24 +190,17 @@ vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
 }
 
 vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
-    // PCA projection
-    Eigen::Matrix4f projectionTransform = CommonTools::get_projection_transform(cloud);
-    CloudPtr cloudPointsProjected = CommonTools::transform3d(cloud, projectionTransform);
-
-    // Drop Z-coordinate
-    for (int i=0; i<cloudPointsProjected->points.size(); i++) {
-        cloudPointsProjected->points[i].z = 0;
-    }
 
     // Find symmetry measure by searching for best axis of symmetry
-    int rotationSteps = 20;
+    int rotationSteps = 180;
     vector<float> bestSym;
     bestSym.push_back(0);
     bestSym.push_back(0);
-   
-    for (int step=0; step<rotationSteps; step++) {
+
+    Mat best_img;
+    for (int step = 0; step < rotationSteps; step++) {
         // Rotate the point cloud to find optimal axis of symmetry
-        float theta = (M_PI/rotationSteps) * step;
+        float theta = (2 * M_PI) * (float(step) / rotationSteps);
         Eigen::Rotation2D<float> rot2(theta);
         Eigen::Matrix4f rotation;
         rotation.setZero();
@@ -221,10 +223,11 @@ vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
 //        while (!visu->wasStopped ()) {
 //            visu->spinOnce(100);
 //        }
-
-        vector<float> sym = FluentCalc::x_and_y_symmetries(rotatedPointCloud);
+        Mat debug_img;
+        vector<float> sym = FluentCalc::x_and_y_symmetries(rotatedPointCloud, debug_img);
         if (sym[0]+sym[1] > bestSym[0]+bestSym[1]) {// a heurestic
             bestSym = sym;
+            best_img = debug_img.clone();
         }
     }
 

@@ -23,7 +23,8 @@ int main() {
 
 	FluentCalc fluentCalc;
 	vector<float> fluents;
-    fluents = fluentCalc.x_and_y_symmetries(cloud);
+    Mat debug_img;
+    fluents = fluentCalc.x_and_y_symmetries(cloud, debug_img);
     cout << "x_symmetry: " << fluents[0] << endl;
     cout << "y_symmetry: " << fluents[1] << endl;
     fluents = fluentCalc.calc_bbox(cloud);

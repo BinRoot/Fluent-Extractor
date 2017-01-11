@@ -162,8 +162,10 @@ public:
     fluent_vector.insert(fluent_vector.end(), bbox3d_fluents.begin(), bbox3d_fluents.end());
 //
 //    // Compute symmetry fluents
-    vector<float> symmetry_fluents = m_fluent_calc.x_and_y_symmetries(aligned_cloud->makeShared());
+    vector<float> symmetry_fluents = m_fluent_calc.principal_symmetries(aligned_cloud->makeShared());
     fluent_vector.insert(fluent_vector.end(), symmetry_fluents.begin(), symmetry_fluents.end());
+
+    cout << "symmetry fluents: " << symmetry_fluents[0] << ", " << symmetry_fluents[1] << endl;
 
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
     cout << "dist from prev fluent: " << dist << endl;
