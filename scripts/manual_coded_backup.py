@@ -4,6 +4,9 @@ import numpy as np
 import csv
 import math
 import rospy
+import os
+import tuck_arms
+import joint_trajectory_file_playback
 from std_msgs.msg import (
     UInt16,
 )
@@ -43,7 +46,15 @@ grip_quat_diag1_right = Quaternion(x=0.00388033002546, y=0.939712736087, z=0.335
 grip_quat_far_right = Quaternion(x=-0.0951612807212, y=0.93509826081, z=0.0220377798776, w=0.340660989165)
 grip_quat_far_left = Quaternion(x=-0.00836081491788, y=0.936349173177, z=-0.0590992233266, w=0.34595896356)
 
+grip_quat_far_sleeve_left = Quaternion(x=0.159039527024, y=0.966563204639, z=0.0260476525512, w=0.199458065965)
+grip_quat_far_sleeve_right = Quaternion(x=-0.210220991353, y=0.958000746332, z=-0.0262295833013, w=0.193271088839)
 
+grip_quat_raise_left = Quaternion(x=0.0390104192206, y=0.885870078652, z=-0.462257511788, w=-0.00551214451998)
+grip_quat_raise_right = Quaternion(x=-0.00493548757261, y=0.895511255249, z=0.442648807361, w=0.0457959171328)
+
+
+grip_quat_far2_left = Quaternion(x=0.0858671666539, y=0.935089288861, z=-0.0618287152105, w=0.338248520357)
+grip_quat_far2_right = Quaternion(x=-0.149847636437, y=0.932923007439, z=0.0233373030367, w=0.326581870795)
 
 class ClothFolder(object):
 
@@ -84,11 +95,13 @@ class ClothFolder(object):
 
     def rest(self, limb):
         if limb == 'left':
-            self.move_arm('left', 0.6, 0.6, 0.35, Quaternion(x=-0.25, y=0.95, z=0.0, w=0.1))
+            self.move_arm('left', 0.6, 0.6, 0.35, grip_quat_near_left)
         elif limb == 'right':
-            self.move_arm('right', 0.6, -0.6, 0.35, Quaternion(x=0.25, y=0.95, z=0.0, w=0.1))
+            self.move_arm('right', 0.6, -0.6, 0.35, grip_quat_near_right)
 
-    def move_arms(self, l, r):
+    def move_arms(self, l, r, duration=2.):
+        sleep_rate = 0.005
+        sleep_counts = duration / sleep_rate
         l_pos = self._left_arm.endpoint_pose()['position']
         l_pos_arr = [l_pos.x, l_pos.y, l_pos.z]
         l_ik = self.approx_compute_ik('left', l_pos_arr, l)
@@ -105,15 +118,18 @@ class ClothFolder(object):
         while (not rospy.is_shutdown()) and (not left_done or not right_done):
             self._right_arm.set_joint_positions(r_ik)
             self._left_arm.set_joint_positions(l_ik)
+            should_sleep = False
             if ('position' in self._right_arm.endpoint_pose()):
                 pos = self._right_arm.endpoint_pose()['position']
                 dist = ( (pos.x - r[0])**2 + 
                          (pos.y - r[1])**2 + 
                          (pos.z - r[2])**2 ) ** 0.5
-                rospy.sleep(0.12)
+                should_sleep = True
+                rospy.sleep(sleep_rate)
                 right_sleep_count += 1
-                if dist < 0.02 or right_sleep_count > 60:
+                if dist < 0.02 or right_sleep_count > sleep_counts:
                     right_done = True
+
             else:
                 break
             if ('position' in self._left_arm.endpoint_pose()):
@@ -121,12 +137,15 @@ class ClothFolder(object):
                 dist = ( (pos.x - l[0])**2 + 
                          (pos.y - l[1])**2 + 
                          (pos.z - l[2])**2 ) ** 0.5
-                rospy.sleep(0.1)
+                should_sleep = True
+                rospy.sleep(sleep_rate)
                 left_sleep_count += 1
-                if dist < 0.02 or left_sleep_count > 60:
+                if dist < 0.02 or left_sleep_count > sleep_counts:
                     left_done = True
+
             else:
                 break
+                
 
 
     def move_arms_old(self, grip1, grip2):
@@ -251,9 +270,16 @@ class ClothFolder(object):
 
         if mid[0] > 0.6:
             if limb == 'right':
-                quat = grip_quat_far_right
+                quat = grip_quat_far_sleeve_right
+#                quat = grip_quat_far2_right
             else:
-                quat = grip_quat_far_left
+                quat = grip_quat_far_sleeve_left
+#                quat = grip_quat_far2_left
+        if mid[2] > 0.2:
+            if limb == 'right':
+                quat = grip_quat_diag1_right
+            else:
+                quat = grip_quat_diag1_left
 
         mid_ik = self.compute_ik(limb, mid, quat)
         if dist_pos(a,b) < 0.02:
@@ -440,6 +466,19 @@ class ClothFolder(object):
             if sleep_count > 10:
                 break
 
+    def close_grips(self):
+        grip_right = baxter_interface.Gripper('right', CHECK_VERSION)
+        grip_left = baxter_interface.Gripper('left', CHECK_VERSION)
+        sleep_count = 0
+        while not rospy.is_shutdown():
+            grip_right.close()
+            grip_left.close()
+            rospy.sleep(0.01)
+            sleep_count += 1
+            if sleep_count > 10:
+                break
+
+
     def fold_fancy(self, limb, grip, release):
         # move grip a little over to release
 #        grip_np = np.asarray(grip)
@@ -585,6 +624,85 @@ class ClothFolder(object):
         self.rest('right')
         self.rest('left')
 
+    def fold_sleeves(self):
+        rest_left, rest_right = [0.6, 0.6, 0.3], [0.6, -0.6, 0.3]
+        left_sleeve, right_sleeve = [0.95, 0.4, 0.04], [0.95, -0.4, 0.04]
+        left_sleeve_up, right_sleeve_up = [0.95, 0.39, 0.08], [0.95, -0.39, 0.08]
+        left_sleeve_in, right_sleeve_in = [0.95, 0.12, 0.05], [0.95, -0.12, 0.05]
+        left_sleeve_in2, right_sleeve_in2 = [0.95, 0.1, 0.06], [0.95, -0.1, 0.06]
+        left_sleeve_in2_up, right_sleeve_in2_up = [0.85, 0.25, 0.2], [0.85, -0.25, 0.2]
+
+        self.open_grips()
+#        self.move_arms(rest_left, rest_right)
+        self.move_arms(left_sleeve_up, right_sleeve_up, duration=1)
+        self.move_arms(left_sleeve, right_sleeve, duration=1)
+        self.close_grips()
+        self.move_arms(left_sleeve_up, right_sleeve_up, duration=1)
+        self.move_arms(left_sleeve_in, right_sleeve_in, duration=1)
+        self.open_grips()
+        self.move_arms(left_sleeve_in2, right_sleeve_in2, duration=0.5)
+        self.move_arms(left_sleeve_in2_up, right_sleeve_in2_up, duration=0.1)
+
+    def fold_bottom_to_top(self):
+        left_grip, right_grip = [0.4, 0.22, 0.03], [0.4, -0.22, 0.03]
+        left_grip_up, right_grip_up = [0.35, 0.18, 0.48], [0.35, -0.18, 0.48]
+        left_grip_back_down, right_grip_back_down = [0.4, 0.18, 0.3], [0.4, -0.18, 0.3]
+        left_grip_forward, right_grip_forward = [0.64, 0.18, 0.3], [0.64, -0.18, 0.3]
+        left_grip_forward_down, right_grip_forward_down = [0.74, 0.18, 0.21], [0.74, -0.18, 0.21]
+
+        self.open_grips()
+        self.move_arms(left_grip, right_grip)
+        self.close_grips()
+        self.move_arms(left_grip_up, right_grip_up)
+        self.move_arms(left_grip_back_down, right_grip_back_down)
+        self.move_arms(left_grip_forward, right_grip_forward)
+        self.move_arms(left_grip_forward_down, right_grip_forward_down)
+        self.open_grips()
+
+    def fold_bottom_to_top_again(self):
+        x_start = 0.5
+        left_grip, right_grip = [x_start, 0.2, 0.03], [x_start, -0.2, 0.03]
+        left_grip_up, right_grip_up = [x_start + 0.1, 0.2, 0.1], [x_start + 0.1, -0.2, 0.1]
+        left_grip_forward, right_grip_forward = [x_start + 0.34, 0.2, 0.1], [x_start + 0.34, -0.2, 0.1]
+        # left orientation: 
+        # x: 0.703098566301
+        # y: 0.710888979481
+        # z: -0.00311959300006
+        # w: 0.0167192421428
+
+        # right orientation: 
+        # x: -0.623308206716
+        # y: 0.781255632487
+        # z: 0.00058565505014
+        # w: 0.0335585034788
+
+        self.open_grips()
+        self.move_arms(left_grip, right_grip)
+        self.close_grips()
+        self.move_arms(left_grip_up, right_grip_up)
+        self.move_arms(left_grip_forward, right_grip_forward)
+        self.open_grips()
+
+    def fold_left_to_right(self):
+        grip, release = [0.75, 0.2, 0.03], [0.75, -0.2, 0.03]
+        grip_up = [0.75, 0.25, 0.1]
+        release_up = [0.7, -0.25, 0.1]
+        self.rest('right')
+        self.open_grip('left')
+        self.move_arm('left', grip[0], grip[1], grip[2], grip_quat_near_left)
+        self.close_grip('left')
+        self.move_arm('left', grip_up[0], grip_up[1], grip_up[2], grip_quat_near_left)
+        self.move_arm('left', release_up[0], release_up[1], release_up[2], grip_quat_near_left)
+        self.open_grip('left')
+        self.move_arm('left', release_up[0], release_up[1] - 0.05, release_up[2] + 0.05, grip_quat_near_left)
+
+    def flatten_cloth(self):
+        cloth = [0.75, 0, 0.03]
+        self.move_arm('left', cloth[0], cloth[1] - 0.05, cloth[2] + 0.1, grip_quat_near_left)
+        self.move_arm('left', cloth[0], cloth[1] - 0.05, cloth[2], grip_quat_near_left)
+        self.move_arm('left', cloth[0], cloth[1] - 0.1, cloth[2] + 0.1, grip_quat_near_left)
+        self.move_arm('left', cloth[0], cloth[1] - 0.1, cloth[2], grip_quat_near_left)
+        self.move_arm('left', cloth[0], cloth[1] - 0.1, cloth[2] + 0.1, grip_quat_near_left)
 
 
 # grip [0.493987,0.209845,0.16986],
@@ -613,32 +731,35 @@ def callback(data):
     pos_right_arr = [pos_right.x, pos_right.y, pos_right.z]
     pos_left_arr = [pos_left.x, pos_left.y, pos_left.z]
 
-    # which arm is closer to the grip point
-    dist_to_right = math.sqrt(math.pow(pos_right[0] - grip[0], 2) + 
-                              math.pow(pos_right[1] - grip[1], 2) + 
-                              math.pow(pos_right[2] - grip[2], 2))
 
-    dist_to_left = math.sqrt(math.pow(pos_left[0] - grip[0], 2) + 
-                             math.pow(pos_left[1] - grip[1], 2) + 
-                             math.pow(pos_left[2] - grip[2], 2))
 
-    print('x diff', release[0] - grip[0])
-    if release[0] - grip[0] > 0.3:
-        print('2 handed fold required')
-        # left arm (right is neg)
-        grip1 = [grip_goal_x, grip_goal_y + 0.15, grip_goal_z]
-        release1 = [release_goal_x, release_goal_y + 0.15, release_goal_z]
-        # right arm (left is pos)
-        grip2 = [grip_goal_x, grip_goal_y - 0.15, grip_goal_z]
-        release2 = [release_goal_x, release_goal_y - 0.15, release_goal_z]
-        folder.fold2(grip1, release1, grip2, release2)
-    else:
-        limb = 'right' if dist_to_right < dist_to_left else 'left'
-        folder.fold_fancy(limb, grip, release)
+    
+
 
 def main():
     rospy.init_node('baxter_cloth_folder')
     rospy.Subscriber("/vcla/cloth_folding/action", String, callback)
+
+    tucker = tuck_arms.Tuck(False)
+
+    folder = ClothFolder()
+
+    rospy.sleep(2)
+
+    tucker.supervised_tuck()
+    folder.fold_sleeves()
+
+    tucker.supervised_tuck()
+    folder.fold_bottom_to_top()
+
+    tucker.supervised_tuck()
+    folder.fold_bottom_to_top_again()
+
+    tucker.supervised_tuck()
+    folder.fold_left_to_right()
+
+    tucker.supervised_tuck()
+
     rospy.spin()
 
 

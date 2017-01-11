@@ -40,6 +40,7 @@ void CallBackFunc(int event, int x, int y, int flags, void* param) {
     if  ( event == EVENT_LBUTTONDOWN ) {
         FoldSimulator* cloth = (FoldSimulator*)(param);
         cloth->set_grip_point(Point2i(x, y));
+        cout << "left click " << Point2i(x, y) << endl;
     }
     else if  ( event == EVENT_RBUTTONDOWN ) {
         cout << "right click" << endl;
@@ -56,9 +57,9 @@ void FoldSimulator::run_gui() {
     namedWindow(get_name(), CV_WINDOW_AUTOSIZE);
     setMouseCallback(get_name(), CallBackFunc, this);
 
-    while (waitKey(20) != 'q') {
-        imshow(get_name(), visualize());
-    }
+//    while (waitKey(20) != 'q') {
+//        imshow(get_name(), visualize());
+//    }
 }
 
 bool FoldSimulator::fold() {

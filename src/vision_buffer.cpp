@@ -40,13 +40,11 @@ public:
       cout << "table midpoint is " << m_table_midpoint << endl;
       cout << "table normal is " << m_table_normal << endl;
       imshow("table", m_table_mask);
-      waitKey(100);
     }
 
     Mat cloth_mask;
     if (m_table_mask.size().area() > 0) {
       CloudPtr table_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr->makeShared(), pixel2voxel, m_table_mask, true);
-
 
       // no obstacles allowed
       double max_dist_from_table = 0;
@@ -128,8 +126,21 @@ public:
         hulls.push_back(hull);
         Mat component_img_hull = component_img.clone();
         drawContours(component_img_hull, hulls, 0, Scalar(255), -1);
-        double semantic_dist_to_table = CommonTools::shape_dist(table_mask_eroded, component_img_hull);
+        double semantic_dist_to_table = CommonTools::shape_dist(m_table_mask, component_img_hull);
         if (semantic_dist_to_table < 0.2) continue;
+
+//        cout << "semantic dist to table is " << semantic_dist_to_table << endl;
+//        Mat img_with_table_and_component = CommonTools::draw_mask(img_bgr, m_table_mask, Scalar(0, 0, 255));
+//        img_with_table_and_component = CommonTools::draw_mask(img_with_table_and_component, component_img_hull, Scalar(0, 255, 0));
+//        imshow("table_and_component", img_with_table_and_component);
+        // UPLOAD TO BAXTER
+
+//        Mat xdisplay_img = CommonTools::xdisplay(img_with_table_and_component);
+//        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
+//        m_xdisplay_pub.publish(*msg);
+
+//        imshow("cloth component", component_img);
+//        waitKey(100);
 
         // component size should not be bigger than table
         if (components[i].size() > 0.95 * table_2d_area) {
@@ -170,12 +181,18 @@ public:
       // try grabcut on cloth_mask
       cloth_mask = CommonTools::grab_cut_segmentation(img_bgr, cloth_mask);
 
-      CommonTools::dilate_erode(cloth_mask, 1);
-      CommonTools::dilate_erode(cloth_mask, 2);
-      CommonTools::dilate_erode(cloth_mask, 3);
-      CommonTools::draw_contour(cloth_mask, cloth_mask.clone(), cv::Scalar(255));
+//      CommonTools::dilate_erode(cloth_mask, 1);
+//      CommonTools::dilate_erode(cloth_mask, 2);
+//      CommonTools::dilate_erode(cloth_mask, 3);
+//      CommonTools::draw_contour(cloth_mask, cloth_mask.clone(), cv::Scalar(255));
 
       imshow("cloth", cloth_mask);
+
+      Mat cloth_mask_col;
+      cvtColor(cloth_mask, cloth_mask_col, CV_GRAY2RGB);
+      Mat xdisplay_img = CommonTools::xdisplay(cloth_mask_col);
+      sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
+      m_xdisplay_pub.publish(*msg);
 
 
       // save cloth_mask to file
@@ -197,12 +214,16 @@ public:
 
       m_pub.publish(cloth_cloud_ptr);
 
+//      stringstream pcl_filename;
+//      pcl_filename << img_idx << ".pcd";
+//      pcl::io::savePCDFileASCII(pcl_filename.str(), *cloth_cloud_ptr);
+
       waitKey(0);
     } else {
       cout << "no cloth found" << endl;
     }
 
-    waitKey(60);
+    waitKey(20);
    
   }
 
@@ -240,7 +261,7 @@ int main(int argc, char **argv) {
   json.ParseStream(is);
 
   ros::Publisher pub = node_handle.advertise<Cloud>("vision_buffer_pcl", 1);
-  ros::Publisher xdisplay_pub = node_handle.advertise<sensor_msgs::Image>("/robot/xdisplay", 1);
+  ros::Publisher xdisplay_pub = node_handle.advertise<sensor_msgs::Image>("/vcla/cloth_folding/vision_buffer", 1);
   BufferManager buffer_manager(json["vid_idx"].GetInt(), pub, xdisplay_pub);
 
   if (json["use_kinect"].GetBool()) {

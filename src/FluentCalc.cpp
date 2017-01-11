@@ -68,6 +68,7 @@ vector<float> FluentCalc::x_and_y_symmetries(CloudPtr cloud) {
         max_x = max(max_x, cloud->points[i].x);
         max_y = max(max_y, cloud->points[i].y);
     }
+
     vector<PointT> normalized_points;
     for (int i=0; i<cloud->points.size(); i++) {
         PointT norm_point = PointT(cloud->points[i]);
@@ -102,12 +103,13 @@ vector<float> FluentCalc::x_and_y_symmetries(CloudPtr cloud) {
     vector<float> fluents;
     fluents.push_back(x_sym_measure);
     fluents.push_back(y_sym_measure);
+    cout << "x sym: " << x_sym_measure << endl;
+    cout << "y sym: " << y_sym_measure << endl;
     return fluents;
 }
 
 // Computes a orinted outer-bounding bax from a point cloud.
-// It returns the a vector containing the xyz coordinates of the bounding box's two diagonal
-// corners, respectively.
+// It returns the length of the diagonal
 vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
     Eigen::Vector4f pcaCentroid;
     compute3DCentroid(*cloud, pcaCentroid);
@@ -140,12 +142,16 @@ vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
     boxCorner_2 = bboxQuaternion.toRotationMatrix() * boxCorner_2 + bboxTransform;
 
     vector<float> fluents;
-    for (int i=0; i<3; i++) {
-        fluents.push_back(boxCorner_1[i]);
-    }
-    for (int i=0; i<3; i++) {
-        fluents.push_back(boxCorner_2[i]);
-    }
+
+//    for (int i=0; i<3; i++) {
+//        fluents.push_back(boxCorner_1[i]);
+//    }
+//    for (int i=0; i<3; i++) {
+//        fluents.push_back(boxCorner_2[i]);
+//    }
+
+    float diag_length = (boxCorner_1 - boxCorner_2).norm();
+    fluents.push_back(diag_length);
 
     // Uncomment this code to see how well the bounding box fits.
 
@@ -188,4 +194,37 @@ vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
 //    }
 
     return FluentCalc::x_and_y_symmetries(cloudPointsProjected);
+}
+
+vector<float> FluentCalc::calc_inner_outer_bbox(CloudPtr cloud, cv::Mat& debug_img,
+                                                float& x_min, float& y_min, float& z_min,
+                                                float& scale_x, float& scale_y, float& scale_z,
+                                                cv::Rect& outer_bbox) {
+    cv::Mat mask = CommonTools::get_image_from_cloud(cloud, x_min, y_min, z_min, scale_x, scale_y, scale_z, "xy");
+
+    outer_bbox = CommonTools::get_outer_rect(mask);
+    cv::Rect inner_bbox = CommonTools::get_inner_rect(mask);
+
+    debug_img = mask.clone();
+    cv::rectangle(debug_img, outer_bbox, cv::Scalar(0, 0, 255), 3);
+    cv::rectangle(debug_img, inner_bbox, cv::Scalar(0, 255, 0), 3);
+
+    cv::imshow("fluents", debug_img);
+    cv::waitKey(100);
+
+    float bbox_height = outer_bbox.height;
+    float h1 = 1.0;
+    float w1 = outer_bbox.width / float(outer_bbox.height);
+    float h2 = inner_bbox.height / float(outer_bbox.height);
+    float w2 = inner_bbox.width / float(outer_bbox.height);
+    float dx = (inner_bbox.x - outer_bbox.x) / float(outer_bbox.height);
+    float dy = (inner_bbox.y - outer_bbox.y) / float(outer_bbox.height);
+
+    vector<float> fluents(5);
+    fluents[0] = w1;
+    fluents[1] = h2;
+    fluents[2] = w2;
+    fluents[3] = dx;
+    fluents[4] = dy;
+    return fluents;
 }

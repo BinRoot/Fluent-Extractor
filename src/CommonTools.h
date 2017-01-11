@@ -19,6 +19,7 @@
 #include <pcl/segmentation/min_cut_segmentation.h>
 #include <pcl/common/transforms.h>
 
+#include <ctime>
 
 #define BOOST_NO_CXX11_SCOPED_ENUMS
 #include <boost/filesystem.hpp>
@@ -120,6 +121,12 @@ public:
             }
         }
         return true;
+    }
+
+    static long int unix_timestamp() {
+      time_t t = std::time(0);
+      long int now = static_cast<long int> (t);
+      return now;
     }
 
     static cv::Rect get_inner_rect(const cv::Mat& mask_) {
@@ -436,7 +443,21 @@ public:
       projectionTransform.block<3,3>(0,0) = eigenVectorsPCA.transpose();
       projectionTransform.block<3,1>(0,3) = -1.f * (projectionTransform.block<3,3>(0,0) * pcaCentroid.head<3>());
 
+      // Add a rotation s.t. the first three principal components lies on x, y, z respectively
+      Eigen::Matrix4f rotation;
+      rotation.setZero();
+      rotation(2,0) = 1; rotation(1,1) = 1; rotation(0,2) = 1;
+      projectionTransform  = rotation * projectionTransform;
+
       return projectionTransform;
+    }
+
+    static cv::Mat xdisplay(cv::Mat img, double scale=1.5) {
+        cv::Mat xdisplay_img = cv::Mat::zeros(800, 1024, CV_8UC3);
+        resize(img, img, cv::Size(), scale, scale);
+        int x_offset = (800 - img.cols) / 2;
+        img.copyTo(xdisplay_img(cv::Rect(x_offset, 0, img.cols, img.rows)));
+        return xdisplay_img;
     }
 
     static CloudPtr transform3d(CloudPtr cloud, Eigen::Matrix4f transform) {
@@ -610,7 +631,141 @@ public:
         cv::erode(img, img, element);
     }
 
-    static void draw_contour(cv::Mat& img, const cv::Mat& mask, cv::Scalar color) {
+    static void clip_to_bounds(int& x, int min_val, int max_val) {
+        if (x < min_val) {
+            x = min_val;
+        } else if (x > max_val) {
+            x = max_val;
+        }
+    }
+
+      static void attract_grip_point1(cv::Mat cloth_mask, cv::Point& grip_point) {
+
+          double min_dist = 99999;
+          cv::Point best_grip_point;
+          for (int row = 0; row < cloth_mask.rows; row++) {
+              for (int col = 0; col < cloth_mask.cols; col++) {
+                  if (is_row_col_in_mask(row, col, cloth_mask)) {
+                      cv::Point test_point(col, row);
+                      {
+                          double grip_dist = cv::norm(grip_point - test_point);
+                          if (grip_dist < min_dist) {
+                              min_dist = grip_dist;
+                              best_grip_point.x = test_point.x;
+                              best_grip_point.y = test_point.y;
+                          }
+                      }
+                  }
+              }
+          }
+          if (min_dist < 99990 ) {
+              grip_point.x = best_grip_point.x;
+              grip_point.y = best_grip_point.y;
+          }
+      }
+
+    static cv::Mat get_image_from_cloud(const CloudConstPtr& cloud_const_ptr,
+                                        float& x_min, float& y_min, float& z_min,
+                                        float& scale_x, float& scale_y, float& scale_z, std::string mode="xy") {
+        std::vector<cv::Point2f> points;
+        x_min = std::numeric_limits<float>::infinity();
+        y_min = std::numeric_limits<float>::infinity();
+        z_min = std::numeric_limits<float>::infinity();
+        float x_max = 0;
+        float y_max = 0;
+        float z_max = 0;
+
+
+        for (int i = 0; i < cloud_const_ptr->size(); i++) {
+            PointT p = cloud_const_ptr->at(i);
+            if (p.x < x_min) x_min = p.x;
+            if (p.x > x_max) x_max = p.x;
+            if (p.y < y_min) y_min = p.y;
+            if (p.y > y_max) y_max = p.y;
+            if (p.z < z_min) z_min = p.z;
+            if (p.z > z_max) z_max = p.z;
+
+            cv::Point2f p2;
+            if (!mode.compare("xy")) {
+                p2.x = p.x;
+                p2.y = p.y;
+            } else if (!mode.compare("yz")) {
+                p2.x = p.y;
+                p2.y = p.z;
+            }
+
+            points.push_back(p2);
+        }
+
+        scale_x = x_max - x_min;
+        scale_y = y_max - y_min;
+        scale_z = z_max - z_min;
+        std::cout << "scale x: " << scale_x
+             << ", scale y: " << scale_y
+             << ", scale z: " << scale_z << std::endl;
+
+        float mask_width = 256;
+
+        float mask_height;
+        if (!mode.compare("xy")) {
+            mask_height = mask_width * (scale_y / scale_x);
+        } else if (!mode.compare("yz")) {
+            mask_height = mask_width * (scale_z / scale_y);
+        }
+
+        std::cout << "mask width: " << mask_width << ", mask_height: " << mask_height << std::endl;
+        cv::Mat cloud_mask_raw = cv::Mat::zeros(mask_height, mask_width, CV_8U);
+        for (int i = 0; i < points.size(); i++) {
+            if (!mode.compare("xy")) {
+                int x = mask_width * (points[i].x - x_min) / scale_x;
+                clip_to_bounds(x, 0, int(mask_width) - 1);
+                int y = mask_height * (points[i].y - y_min) / scale_y;
+                clip_to_bounds(y, 0, int(mask_height) - 1);
+                cloud_mask_raw.at<uchar>(y, x) = 255;
+            } else if (!mode.compare("yz")) {
+                int x = mask_width * (points[i].x - y_min) / scale_y;
+                clip_to_bounds(x, 0, int(mask_width) - 1);
+                int y = mask_height * (points[i].y - z_min) / scale_z;
+                clip_to_bounds(y, 0, int(mask_height) - 1);
+                cloud_mask_raw.at<uchar>(y, x) = 255;
+            }
+        }
+
+//    CommonTools::dilate_erode(cloud_mask_raw, 1);
+//    CommonTools::dilate_erode(cloud_mask_raw, 2);
+//    CommonTools::dilate_erode(cloud_mask_raw, 3);
+//    CommonTools::draw_contour(cloud_mask_raw, cloud_mask_raw.clone(), cv::Scalar(255));
+
+        cv::GaussianBlur(cloud_mask_raw, cloud_mask_raw, cv::Size(15, 15), 10, 10);
+        cv::threshold(cloud_mask_raw, cloud_mask_raw, 10, 255, CV_THRESH_BINARY);
+        CommonTools::draw_contour(cloud_mask_raw, cloud_mask_raw.clone(), cv::Scalar(255));
+
+        return cloud_mask_raw;
+    }
+
+    static void center_of_mask(cv::Mat mask, cv::Point& p) {
+        p.x = 0;
+        p.y = 0;
+        int count = 0;
+        for (int row = 0; row < mask.rows; row++) {
+            for (int col = 0; col < mask.cols; col++) {
+                if (mask.at<uchar>(row, col) == 255) {
+                    p.x += col;
+                    p.y += row;
+                    count++;
+                }
+            }
+        }
+
+        if (count == 0) {
+            count = 1;
+        }
+
+        p.x /= count;
+        p.y /= count;
+    }
+
+    static void draw_contour(cv::Mat& img, const cv::Mat& mask, cv::Scalar color, int thickness=-1) {
         std::vector<std::vector<cv::Point>> contours;
         std::vector<cv::Vec4i> hierarchy;
         cv::findContours(mask, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
@@ -622,7 +777,7 @@ public:
                 max_contour_idx = i;
             }
         }
-        cv::drawContours(img, contours, max_contour_idx, color, -1);
+        cv::drawContours(img, contours, max_contour_idx, color, thickness);
     }
 
     static double color_dist(cv::Vec3b color, cv::Vec3b color1){

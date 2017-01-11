@@ -3,6 +3,8 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/io/pcd_io.h>
 #include <std_msgs/String.h>
+#include "ros/package.h"
+
 
 #include "CommonTools.h"
 #include "FluentCalc.h"
@@ -13,97 +15,29 @@ using namespace cv;
 
 class CloudAnalyzer {
 public:
-  CloudAnalyzer(ros::Publisher& pub) {
+  CloudAnalyzer(ros::Publisher& pub, ros::Publisher& pub_ui) {
     m_pub = pub;
+    m_pub_ui = pub_ui;
     m_outfile.open("train.dat", std::ios_base::app);
     m_step_number = 1;
     m_pcd_filename_idx = 1;
-
-
-    m_viz = new pcl::visualization::PCLVisualizer("CloudViewer");
+    m_compute_fold = false;
+//    m_viz = new pcl::visualization::PCLVisualizer("CloudViewer");
   }
 
-  void clip_to_bounds(int& x, int min_val, int max_val) {
-    if (x < min_val) {
-      x = min_val;
-    } else if (x > max_val) {
-      x = max_val;
-    }
-  }
-
-  Mat get_image_from_cloud(const CloudConstPtr& cloud_const_ptr, std::string mode="xy") {
-    vector<cv::Point2f> points;
-    float x_min = std::numeric_limits<float>::infinity();
-    float y_min = std::numeric_limits<float>::infinity();
-    float z_min = std::numeric_limits<float>::infinity();
-    float x_max = 0;
-    float y_max = 0;
-    float z_max = 0;
-
-
-    for (int i = 0; i < cloud_const_ptr->size(); i++) {
-      PointT p = cloud_const_ptr->at(i);
-      if (p.x < x_min) x_min = p.x;
-      if (p.x > x_max) x_max = p.x;
-      if (p.y < y_min) y_min = p.y;
-      if (p.y > y_max) y_max = p.y;
-      if (p.z < z_min) z_min = p.z;
-      if (p.z > z_max) z_max = p.z;
-
-      cv::Point2f p2;
-      if (!mode.compare("xy")) {
-        p2.x = p.x;
-        p2.y = p.y;
-      } else if (!mode.compare("yz")) {
-        p2.x = p.y;
-        p2.y = p.z;
-      }
-
-      points.push_back(p2);
-    }
-
-    float scale_x = x_max - x_min;
-    float scale_y = y_max - y_min;
-    float scale_z = y_max - y_min;
-    cout << "scale x: " << scale_x
-         << ", scale y: " << scale_y
-         << ", scale z: " << scale_z << endl;
-
-    float mask_width = 256;
-
-    float mask_height;
-    if (!mode.compare("xy")) {
-      mask_height = mask_width * (scale_y / scale_x);
-    } else if (!mode.compare("yz")) {
-      mask_height = mask_width * (scale_z / scale_y);
-    }
-
-    cout << "mask width: " << mask_width << ", mask_height: " << mask_height << endl;
-    Mat cloud_mask_raw = Mat::zeros(mask_height, mask_width, CV_8U);
-    for (int i = 0; i < points.size(); i++) {
-      if (!mode.compare("xy")) {
-        int x = mask_width * (points[i].x - x_min) / scale_x;
-        clip_to_bounds(x, 0, int(mask_width) - 1);
-        int y = mask_height * (points[i].y - y_min) / scale_y;
-        clip_to_bounds(y, 0, int(mask_height) - 1);
-        cloud_mask_raw.at<uchar>(y, x) = 255;
-      } else if (!mode.compare("yz")) {
-        int x = mask_width * (points[i].x - y_min) / scale_y;
-        clip_to_bounds(x, 0, int(mask_width) - 1);
-        int y = mask_height * (points[i].y - z_min) / scale_z;
-        clip_to_bounds(y, 0, int(mask_height) - 1);
-        cloud_mask_raw.at<uchar>(y, x) = 255;
-      }
-    }
-    return cloud_mask_raw;
+  void callback_hoi(const std_msgs::String::ConstPtr& msg) {
+    std::string str = msg->data;
+    float grip_x, grip_y, release_x, release_y;
+    sscanf(str.c_str(), "%f,%f,%f,%f", &grip_x, &grip_y, &release_x, &release_y);
+    m_grip.x = grip_x;
+    m_grip.y = grip_y;
+    m_release.x = release_x;
+    m_release.y = release_y;
+    m_compute_fold = true;
   }
 
   void callback(const CloudConstPtr& cloud_const_ptr) {
-
     cout << "cloud size: " << cloud_const_ptr->size() << endl;
-    Mat img = get_image_from_cloud(cloud_const_ptr);
-    imshow("pcl viz orig", img);
-    waitKey(20);
     
     std::vector<float> fluent_vector;
 
@@ -130,33 +64,105 @@ public:
     Eigen::Matrix4f transform = CommonTools::get_projection_transform(cloud_const_ptr->makeShared());
     CloudPtr aligned_cloud = CommonTools::transform3d(cloud_const_ptr->makeShared(), transform);
 
-    Mat img_projected = get_image_from_cloud(aligned_cloud, "yz");
-    imshow("pcl viz projected", img_projected);
-    waitKey(100);
+    float x_min, y_min, z_min;
+    float scale_x, scale_y, scale_z;
+    Mat debug_img;
+    Rect outer_bbox;
+//    vector<float> bbox_fluents = m_fluent_calc.calc_inner_outer_bbox(aligned_cloud->makeShared(), debug_img,
+//                                                                     x_min, y_min, z_min, scale_x, scale_y, scale_z, outer_bbox);
+//    fluent_vector.insert(fluent_vector.end(), bbox_fluents.begin(), bbox_fluents.end());
 
+    if (m_compute_fold) {
+      m_grip.x = m_grip.x * outer_bbox.height;
+      m_grip.y = m_grip.y * outer_bbox.height;
+      m_release.x = m_release.x * outer_bbox.height;
+      m_release.y = m_release.y * outer_bbox.height;
 
-//    m_viz->removeAllPointClouds();
-//    m_viz->addPointCloud(cloud_const_ptr->makeShared(), "cloud");
-//    m_viz->addPointCloud(aligned_cloud->makeShared(), "cloud_projected");
-//    m_viz->addCoordinateSystem(0.5);
-//    while (!m_viz->wasStopped ()) {
-//      m_viz->spinOnce(100);
-//    }
+      cout << "\t\t" << "GRIP" << m_grip << " --> RELEASE " << m_release << endl;
 
-    // Compute width and height fluents
-    vector<float> width_height_fluents = m_fluent_calc.calc_width_and_height(cloud_const_ptr->makeShared(), table_normal);
-    fluent_vector.insert(fluent_vector.end(), width_height_fluents.begin(), width_height_fluents.end());
+      // draw these grip/release circle on debug_img
+      int debug_grip_col = m_grip.x + outer_bbox.x;
+      int debug_grip_row = m_grip.y + outer_bbox.y;
+      int debug_release_col = m_release.x + outer_bbox.x;
+      int debug_release_row = m_release.y + outer_bbox.y;
+      Mat debug_img_col;
+      cvtColor(debug_img, debug_img_col, CV_GRAY2BGR);
+      circle(debug_img_col, cv::Point(debug_grip_col, debug_grip_row), 10, cv::Scalar(0, 0, 255), -1);
+      circle(debug_img_col, cv::Point(debug_release_col, debug_release_row), 10, cv::Scalar(255, 0, 0), -1);
+      imshow("debug points", debug_img_col);
+      waitKey(40);
 
+      float x3d_grip = (m_grip.x * scale_y) / debug_img.cols + y_min;
+      float y3d_grip = (m_grip.y * scale_z) / debug_img.rows + z_min;
+      float x3d_release = (m_release.x * scale_y) / debug_img.cols + y_min;
+      float y3d_release = (m_release.y * scale_z) / debug_img.rows + z_min;
+
+      Point2f target_release_point(x3d_release, y3d_release);
+      Point2f target_grip_point(x3d_grip, y3d_grip);
+      float min_dist_release = std::numeric_limits<float>::infinity();
+      float min_dist_grip = std::numeric_limits<float>::infinity();
+      PointT closest_3d_release;
+      PointT closest_3d_grip;
+      for (int i = 0; i < aligned_cloud->size(); i++) {
+        PointT p3d = aligned_cloud->at(i);
+        Point2f p3d_proj(p3d.x, p3d.y);
+        float dist_release = cv::norm(p3d_proj - target_release_point);
+        float dist_grip = cv::norm(p3d_proj - target_grip_point);
+        if (dist_release < min_dist_release) {
+          min_dist_release = dist_release;
+          closest_3d_release.x = p3d.x;
+          closest_3d_release.y = p3d.y;
+          closest_3d_release.z = p3d.z;
+        }
+        if (dist_grip < min_dist_grip) {
+          min_dist_grip = dist_grip;
+          closest_3d_grip.x = p3d.x;
+          closest_3d_grip.y = p3d.y;
+          closest_3d_grip.z = p3d.z;
+        }
+      }
+
+      cout << "FOUND 3D point in projected cloud: " << closest_3d_grip << " --> " << closest_3d_release << endl;
+      CloudPtr release_cloud(new pcl::PointCloud<PointT>());
+      release_cloud->push_back(closest_3d_release);
+      CloudPtr release_cloud_orig = CommonTools::transform3d(release_cloud, transform.inverse());
+      PointT true_release = release_cloud_orig->at(0);
+
+      CloudPtr grip_cloud(new pcl::PointCloud<PointT>());
+      grip_cloud->push_back(closest_3d_grip);
+      CloudPtr grip_cloud_orig = CommonTools::transform3d(grip_cloud, transform.inverse());
+      PointT true_grip = grip_cloud_orig->at(0);
+
+      cout << "FOUND 3D point in original cloud: " << true_grip << " --> " << true_release << endl;
+      stringstream pub_ui_msg;
+      pub_ui_msg << true_grip.x << ","
+                 << true_grip.y << ","
+                 << true_grip.z << ","
+                 << true_release.x << ","
+                 << true_release.y << ","
+                 << true_release.z << endl;
+      std_msgs::String msg;
+      msg.data = pub_ui_msg.str();
+      m_pub_ui.publish(msg);
+
+      m_compute_fold = false;
+    }
+    // get grip and release 2d points
+
+//    // Compute width and height fluents
+//    vector<float> width_height_fluents = m_fluent_calc.calc_width_and_height(cloud_const_ptr->makeShared(), table_normal);
+//    fluent_vector.insert(fluent_vector.end(), width_height_fluents.begin(), width_height_fluents.end());
+//
     // Compute thickness fluents
     vector<float> thickness_fluents = m_fluent_calc.calc_thickness(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
     fluent_vector.insert(fluent_vector.end(), thickness_fluents.begin(), thickness_fluents.end());
-
-    // Compute bounding-box fluents
-    vector<float> bbox_fluents = m_fluent_calc.calc_bbox(cloud_const_ptr->makeShared());
-    fluent_vector.insert(fluent_vector.end(), bbox_fluents.begin(), bbox_fluents.end());
-
-    // Compute symmetry fluents
-    vector<float> symmetry_fluents = m_fluent_calc.principal_symmetries(cloud_const_ptr->makeShared());
+//
+//    // Compute bounding-box fluents
+    vector<float> bbox3d_fluents = m_fluent_calc.calc_bbox(aligned_cloud->makeShared());
+    fluent_vector.insert(fluent_vector.end(), bbox3d_fluents.begin(), bbox3d_fluents.end());
+//
+//    // Compute symmetry fluents
+    vector<float> symmetry_fluents = m_fluent_calc.x_and_y_symmetries(aligned_cloud->makeShared());
     fluent_vector.insert(fluent_vector.end(), symmetry_fluents.begin(), symmetry_fluents.end());
 
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
@@ -165,13 +171,12 @@ public:
 
     if (dist > 0.3) {
       cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
-      //-- save pcd
-//      stringstream pcd_filename;
-//      pcd_filename << "out_" << m_step_number << ".pcd";
-//      pcl::io::savePCDFile(pcd_filename.str(), *(cloud_const_ptr->makeShared()));
-      //--
+      // SAVE  state_img, debug_img, fluent vector
 
-      save_fluent_vector(fluent_vector);
+//      Mat state_img = CommonTools::get_image_from_cloud(aligned_cloud, "yz");
+//      save_fluent_data(state_img, debug_img, fluent_vector);
+
+//      save_fluent_vector(fluent_vector);
       print_fluent_vector(fluent_vector);
 
       m_prev_fluent_vector = fluent_vector;
@@ -187,7 +192,11 @@ private:
   int m_vid_idx;
   int m_pcd_filename_idx;
   ros::Publisher m_pub;
+  ros::Publisher m_pub_ui;
   pcl::visualization::PCLVisualizer *m_viz;
+  cv::Point2f m_grip;
+  cv::Point2f m_release;
+  bool m_compute_fold;
   
   void print_fluent_vector(std::vector<float> fluent_vector) {
     for (int i = 0; i < fluent_vector.size(); i++) {
@@ -205,6 +214,29 @@ private:
       sum_of_squares += pow(f1[i] - f2[i], 2.0f);
     }
     return pow(sum_of_squares, 0.5f);
+  }
+
+  void save_fluent_data(cv::Mat state_img, cv::Mat debug_img, std::vector<float> fluent_vector) {
+    String path = ros::package::getPath("fluent_extractor") + "/fluents/";
+    long int timestamp = CommonTools::unix_timestamp();
+
+    stringstream state_img_filename;
+    state_img_filename << path << timestamp << "_state.png";
+    imwrite(state_img_filename.str(), state_img);
+
+    stringstream debug_img_filename;
+    debug_img_filename << path << timestamp << "_debug.png";
+    imwrite(debug_img_filename.str(), debug_img);
+
+    stringstream fluent_mat_filename;
+    fluent_mat_filename << path << timestamp << "_fluents";
+    cv::Mat fluent_mat = Mat::zeros(fluent_vector.size(), 1, CV_32F);
+    for (int i = 0; i < fluent_vector.size(); i++) {
+      fluent_mat.at<float>(i) = fluent_vector[i];
+    }
+    FileStorage fs(fluent_mat_filename.str(), FileStorage::WRITE);
+    fs << "fluents" << fluent_mat;
+    fs.release();
   }
 
   void save_fluent_vector(std::vector<float> fluent_vector) {
@@ -235,10 +267,13 @@ int main(int argc, char **argv) {
 
   ros::NodeHandle node_handle;
   ros::Publisher pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/fluent_vector", 1);
+  ros::Publisher pub_ui = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/grip_release", 1);
 
-  CloudAnalyzer cloud_analyzer(pub);
+  CloudAnalyzer cloud_analyzer(pub, pub_ui);
 
   ros::Subscriber sub = node_handle.subscribe<Cloud>("vision_buffer_pcl", 1, &CloudAnalyzer::callback, &cloud_analyzer);
+
+  ros::Subscriber sub2 = node_handle.subscribe("/vcla/cloth_folding/hoi_action", 1000, &CloudAnalyzer::callback_hoi, &cloud_analyzer);
 
 
   // outfile << step_number++ << " qid:" << json["vid_idx"].GetInt() << " 1:" << cloth_feature[0] << " 2:" << cloth_feature[1] << endl;

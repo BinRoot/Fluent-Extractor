@@ -14,7 +14,7 @@ public:
     FoldSimulator() {}
     FoldSimulator(cv::Mat mask) {
         m_next_line_p = &m_line_p1;
-        m_name = "cloth";
+        m_name = "cloth_sim";
         m_contours.push_back(mask);
     }
     FoldSimulator(std::string name, std::string filepath) {
@@ -33,6 +33,16 @@ public:
     cv::Mat visualize();
     void set_grip_point(cv::Point2i grip_point);
     void set_line_point(cv::Point2i line_p);
+    cv::Point2i get_grip_point() { return m_grip_point; }
+    cv::Point2i get_release_point() {
+      double line_slope = double(m_line_p2.y - m_line_p1.y) / double(m_line_p2.x - m_line_p1.x);
+      double line_y_intersect = m_line_p2.y - line_slope * m_line_p2.x;
+
+      double d = (m_grip_point.x + (m_grip_point.y - line_y_intersect) * line_slope) / (1.0 + line_slope*line_slope);
+      double xp = 2 * d - m_grip_point.x;
+      double yp = 2 * d * line_slope - m_grip_point.y + 2 * line_y_intersect;
+      return cv::Point2i(xp, yp);
+    }
     std::string get_name();
     void save(std::string filename);
     cv::Mat flatten();
