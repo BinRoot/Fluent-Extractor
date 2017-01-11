@@ -175,17 +175,52 @@ vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
 }
 
 vector<float> FluentCalc::principal_symmetries(CloudPtr cloud) {
+    // PCA projection
     Eigen::Matrix4f projectionTransform = CommonTools::get_projection_transform(cloud);
     CloudPtr cloudPointsProjected = CommonTools::transform3d(cloud, projectionTransform);
 
-    // Uncomment this code to see the axises
-//    pcl::visualization::PCLVisualizer *visu;
-//    visu = new pcl::visualization::PCLVisualizer("PlyViewer");
-//    visu->addPointCloud(cloudPointsProjected, "bboxedCloud");
-//    visu->addCoordinateSystem(0.5);
-//    while (!visu->wasStopped ()) {
-//        visu->spinOnce(100);
-//    }
+    // Drop Z-coordinate
+    for (int i=0; i<cloudPointsProjected->points.size(); i++) {
+        cloudPointsProjected->points[i].z = 0;
+    }
 
-    return FluentCalc::x_and_y_symmetries(cloudPointsProjected);
+    // Find symmetry measure by searching for best axis of symmetry
+    int rotationSteps = 20;
+    vector<float> bestSym;
+    bestSym.push_back(0);
+    bestSym.push_back(0);
+   
+    for (int step=0; step<rotationSteps; step++) {
+        // Rotate the point cloud to find optimal axis of symmetry
+        float theta = (M_PI/rotationSteps) * step;
+        Eigen::Rotation2D<float> rot2(theta);
+        Eigen::Matrix4f rotation;
+        rotation.setZero();
+        rotation.block<2,2>(0,0) = rot2.toRotationMatrix();
+        CloudPtr rotatedPointCloud = CommonTools::transform3d(cloud, rotation);
+
+        // Re-center point cloud
+        PointT minPoint, maxPoint;
+        getMinMax3D(*rotatedPointCloud, minPoint, maxPoint);
+        for (int i=0; i<rotatedPointCloud->points.size(); i++) {
+            rotatedPointCloud->points[i].x -= (abs(maxPoint.x) - abs(minPoint.x))/2;
+            rotatedPointCloud->points[i].y -= (abs(maxPoint.y) - abs(minPoint.y))/2;
+        }
+
+        // Uncomment this code to see the axises
+//        pcl::visualization::PCLVisualizer *visu;
+//        visu = new pcl::visualization::PCLVisualizer("PlyViewer");
+//        visu->addPointCloud(rotatedPointCloud, "bboxedCloud");
+//        visu->addCoordinateSystem(0.5);
+//        while (!visu->wasStopped ()) {
+//            visu->spinOnce(100);
+//        }
+
+        vector<float> sym = FluentCalc::x_and_y_symmetries(rotatedPointCloud);
+        if (sym[0]+sym[1] > bestSym[0]+bestSym[1]) {// a heurestic
+            bestSym = sym;
+        }
+    }
+
+    return bestSym;
 }
