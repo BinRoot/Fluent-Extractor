@@ -24,7 +24,7 @@ int main() {
 	FluentCalc fluentCalc;
 	vector<float> fluents;
     Mat debug_img;
-    fluents = fluentCalc.x_and_y_symmetries(cloud, debug_img);
+    fluents = fluentCalc.calc_x_and_y_symmetries(cloud, debug_img);
     cout << "x_symmetry: " << fluents[0] << endl;
     cout << "y_symmetry: " << fluents[1] << endl;
     fluents = fluentCalc.calc_bbox(cloud);
@@ -32,7 +32,7 @@ int main() {
     for (auto &t : fluents)
         cout << t << " ";
     cout << endl;
-    fluents = fluentCalc.principal_symmetries(cloud);
+    fluents = fluentCalc.calc_principal_symmetries(cloud);
     cout << "first principal axis symmetry: " << fluents[0] << endl;
     cout << "second principal axis symmetry: " << fluents[1] << endl;
 

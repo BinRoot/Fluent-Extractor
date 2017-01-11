@@ -43,10 +43,10 @@ public:
 
     // Get the table normal and vid_idx, which is saved in the header
     string payload = cloud_const_ptr->header.frame_id;
-    int vid_idx;
+    int vid_idx, img_idx;
     float table_normal_x, table_normal_y, table_normal_z;
     float table_midpoint_x, table_midpoint_y, table_midpoint_z;
-    sscanf(payload.c_str(), "%u %f %f %f %f %f %f", &vid_idx,
+    sscanf(payload.c_str(), "%d %d %f %f %f %f %f %f", &vid_idx, &img_idx,
            &table_normal_x, &table_normal_y, &table_normal_z,
            &table_midpoint_x, &table_midpoint_y, &table_midpoint_z);
     PointT table_normal, table_midpoint;
@@ -147,38 +147,39 @@ public:
 
       m_compute_fold = false;
     }
-    // get grip and release 2d points
 
-//    // Compute width and height fluents
-//    vector<float> width_height_fluents = m_fluent_calc.calc_width_and_height(cloud_const_ptr->makeShared(), table_normal);
-//    fluent_vector.insert(fluent_vector.end(), width_height_fluents.begin(), width_height_fluents.end());
-//
+    Mat aligned_mask = m_fluent_calc.get_mask_from_aligned_cloud(aligned_cloud->makeShared());
+
     // Compute thickness fluents
     vector<float> thickness_fluents = m_fluent_calc.calc_thickness(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
     fluent_vector.insert(fluent_vector.end(), thickness_fluents.begin(), thickness_fluents.end());
-//
-//    // Compute bounding-box fluents
+
+    // Compute bounding-box fluents
     vector<float> bbox3d_fluents = m_fluent_calc.calc_bbox(aligned_cloud->makeShared());
     fluent_vector.insert(fluent_vector.end(), bbox3d_fluents.begin(), bbox3d_fluents.end());
-//
-//    // Compute symmetry fluents
-    vector<float> symmetry_fluents = m_fluent_calc.principal_symmetries(aligned_cloud->makeShared());
+
+    // Compute symmetry fluents
+    vector<float> symmetry_fluents = m_fluent_calc.calc_principal_symmetries(aligned_cloud->makeShared());
     fluent_vector.insert(fluent_vector.end(), symmetry_fluents.begin(), symmetry_fluents.end());
 
-    cout << "symmetry fluents: " << symmetry_fluents[0] << ", " << symmetry_fluents[1] << endl;
+    // Compute moment flunets
+    vector<float> moment_fluents = m_fluent_calc.calc_hu_moments(aligned_mask);
+    fluent_vector.insert(fluent_vector.end(), moment_fluents.begin(), moment_fluents.end());
 
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
     cout << "dist from prev fluent: " << dist << endl;
     publish_fluent_vector(fluent_vector);
 
-    if (dist > 0.3) {
+//    print_fluent_vector(fluent_vector);
+
+    if (dist > 1) {
       cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
       // SAVE  state_img, debug_img, fluent vector
 
 //      Mat state_img = CommonTools::get_image_from_cloud(aligned_cloud, "yz");
 //      save_fluent_data(state_img, debug_img, fluent_vector);
 
-//      save_fluent_vector(fluent_vector);
+      save_fluent_vector(fluent_vector, img_idx);
       print_fluent_vector(fluent_vector);
 
       m_prev_fluent_vector = fluent_vector;
@@ -241,8 +242,12 @@ private:
     fs.release();
   }
 
-  void save_fluent_vector(std::vector<float> fluent_vector) {
-    m_outfile << m_step_number++ << " qid:" << m_vid_idx << " ";
+  void save_fluent_vector(std::vector<float> fluent_vector, int step_number) {
+    if (step_number == -1) {
+      step_number = m_step_number;
+      m_step_number++;
+    }
+    m_outfile << step_number++ << " qid:" << m_vid_idx << " ";
     for (int i = 0; i < fluent_vector.size(); i++) {
       m_outfile << (i+1) << ":" << fluent_vector[i];
       if (i < fluent_vector.size() - 1) m_outfile << " ";

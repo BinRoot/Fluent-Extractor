@@ -204,6 +204,7 @@ public:
       stringstream payload;
 
       payload << m_vid_idx << " "
+              << img_idx << " "
               << m_table_normal.x << " "
               << m_table_normal.y << " "
               << m_table_normal.z << " "
@@ -285,7 +286,7 @@ int main(int argc, char **argv) {
       int voxel2pixel[img_bgr.size().area()];
       CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
 
-      buffer_manager.process(cloud_ptr, img_bgr, pixel2voxel, voxel2pixel, img_idx);
+      buffer_manager.process(cloud_ptr, img_bgr, pixel2voxel, voxel2pixel, img_idx--);
       if (json["loop_mode"].GetBool()) img_idx--;
     }
   }
