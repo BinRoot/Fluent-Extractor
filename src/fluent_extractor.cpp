@@ -38,6 +38,10 @@ public:
 
   void callback(const CloudConstPtr& cloud_const_ptr) {
     cout << "cloud size: " << cloud_const_ptr->size() << endl;
+
+    if (cloud_const_ptr->size() == 0) {
+      return;
+    }
     
     std::vector<float> fluent_vector;
 
