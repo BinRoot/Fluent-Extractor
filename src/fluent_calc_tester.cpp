@@ -36,5 +36,6 @@ int main() {
     cout << "first principal axis symmetry: " << fluents[0] << endl;
     cout << "second principal axis symmetry: " << fluents[1] << endl;
 
+    fluents = fluentCalc.calc_keypoints(cloud);
     return 0;
 }

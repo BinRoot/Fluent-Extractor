@@ -19,6 +19,7 @@ public:
     static std::vector<float> calc_principal_symmetries(CloudPtr cloud);
     static cv::Mat get_mask_from_aligned_cloud(CloudPtr aligned_cloud);
     static std::vector<float> calc_hu_moments(cv::Mat mask);
+    static std::vector<float> calc_keypoints(CloudPtr cloud);
 
   };
 
