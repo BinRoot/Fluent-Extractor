@@ -3,6 +3,7 @@
 #include <pcl/point_types.h>
 #include <pcl/common/common.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/console/parse.h>
 
 using namespace cv;
 using namespace std;
@@ -232,5 +233,34 @@ vector<float> FluentCalc::calc_inner_outer_bbox(CloudPtr cloud, cv::Mat& debug_i
     fluents[2] = w2;
     fluents[3] = dx;
     fluents[4] = dy;
+    return fluents;
+}
+
+// Intrinsic shape signature keypoints. TO-DO: normalize it into real fluents
+vector<float> FluentCalc::calc_keypoints(CloudPtr cloud) {
+    CloudPtr keypoints(new pcl::PointCloud<PointT> ());
+
+    double cloud_resolution = 0.0058329;
+
+    pcl::ISSKeypoint3D<PointT, PointT> iss_detector;
+    pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT> ());
+
+    iss_detector.setSearchMethod(tree);
+    iss_detector.setSalientRadius (6 * cloud_resolution);
+    iss_detector.setNonMaxRadius (4 * cloud_resolution);
+    iss_detector.setThreshold21(0.975);
+    iss_detector.setThreshold32(0.975);
+    iss_detector.setMinNeighbors(5);
+    iss_detector.setNumberOfThreads(1);
+    iss_detector.setInputCloud(cloud);
+    iss_detector.compute(*keypoints);
+ 
+    for (int i=0; i<keypoints->points.size(); i++) {
+        fluents.push_back(points[i].x);
+        fluents.push_back(points[i].y);
+        fluents.push_back(points[i].z);
+    }
+
+    vector<float> fluents;
     return fluents;
 }
