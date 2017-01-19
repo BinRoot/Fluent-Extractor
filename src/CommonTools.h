@@ -949,6 +949,10 @@ public:
         return shirt_mask;
     }
 
+    static bool check_mkdir(std::string path) {
+      return boost::filesystem::create_directory(path);
+    }
+
     static CloudPtr get_keypoints(CloudPtr cloud) {
         double cloud_resolution (0.0058329);
         //TreePtr tree (new TreePtr());
@@ -1285,6 +1289,24 @@ public:
             } else if (dense) mask_cloud_ptr->push_back(dummy_point);
         }
         return mask_cloud_ptr;
+    }
+
+    static void get_cloud_projections(CloudPtr cloud, int* voxel2pixel,
+                                      cv::Mat& img_bgr, cv::Mat& img_x,
+                                      cv::Mat& img_y, cv::Mat& img_z) {
+      img_bgr = cv::Mat::zeros(cloud->height, cloud->width, CV_8UC3);
+      img_x = cv::Mat::zeros(cloud->height, cloud->width, CV_16U);
+      img_y = cv::Mat::zeros(cloud->height, cloud->width, CV_16U);
+      img_z = cv::Mat::zeros(cloud->height, cloud->width, CV_16U);
+      for (int i = 0; i < cloud->size(); i++) {
+        int row = i / cloud->width;
+        int col = i % cloud->width;
+        PointT p = cloud->at(i);
+        img_x.at<ushort>(row, col) = ushort(p.x * 1000.0 + 10000.0);
+        img_y.at<ushort>(row, col) = ushort(p.y * 1000.0 + 10000.0);
+        img_z.at<ushort>(row, col) = ushort(p.z * 1000.0 + 10000.0);
+        img_bgr.at<cv::Vec3b>(row, col) = cv::Vec3b(p.b, p.g, p.r);
+      }
     }
 
     static CloudPtr make_cloud_ptr(cv::Mat img_bgr,

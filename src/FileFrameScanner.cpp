@@ -53,7 +53,7 @@ bool FileFrameScanner::get(int idx, cv::Mat& img_bgr, cv::Mat& img_x, cv::Mat& i
     left_hand = m_left_hand;
     right_hand = m_right_hand;
     if (img_bgr.size().area() == 0) {
-        cout << "ERR: " << img_file << " is not found" << endl;
+        cout << "ERR: " << img_file << " is not found in " << m_filepath << endl;
         return false;
     } else if (img_x.size().area() == 0) {
         cout << "ERR: " << x_file << " is malformed" << endl;

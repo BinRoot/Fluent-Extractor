@@ -254,12 +254,14 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "vision_buffer");
   ros::NodeHandle node_handle;
 
+
   // Read the config file
   FILE* fp = fopen(argv[1], "rb");
   char readBuffer[65536];
   FileReadStream is(fp, readBuffer, sizeof(readBuffer));
   Document json;
   json.ParseStream(is);
+
 
   ros::Publisher pub = node_handle.advertise<Cloud>("vision_buffer_pcl", 1);
   ros::Publisher xdisplay_pub = node_handle.advertise<sensor_msgs::Image>("/vcla/cloth_folding/vision_buffer", 1);
@@ -269,6 +271,25 @@ int main(int argc, char **argv) {
     std::string kinect_topic = node_handle.resolveName(json["kinect_topic"].GetString());
     ros::Subscriber sub = node_handle.subscribe(kinect_topic, 1, &BufferManager::kinect_callback, &buffer_manager);
     ros::spin();
+  } else if (json["use_recording"].GetBool()) {
+    BufferManager buffer_manager(0, pub, xdisplay_pub);
+
+    string record_dir = ros::package::getPath("fluent_extractor") + "/" + json["record_dir"].GetString() + "/";
+    FileFrameScanner scanner(record_dir);
+
+    Mat img_bgr, x, y, z;
+    PointT left_hand, right_hand;
+    int img_idx = json["start_frame_idx"].GetInt();
+
+    while(scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
+      if (!ros::ok()) break;
+      int pixel2voxel[img_bgr.size().area()];
+      int voxel2pixel[img_bgr.size().area()];
+      CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
+
+      buffer_manager.process(cloud_ptr, img_bgr, pixel2voxel, voxel2pixel, img_idx - 1);
+      if (json["loop_mode"].GetBool()) img_idx--;
+    }
   } else {
     for (int vid_idx = json["vid_idx_start"].GetInt(); vid_idx <= json["vid_idx_end"].GetInt(); vid_idx++) {
       BufferManager buffer_manager(vid_idx, pub, xdisplay_pub);

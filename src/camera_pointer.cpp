@@ -22,6 +22,7 @@
 
 #include <pcl/common/transformation_from_correspondences.h>
 #include <pcl/common/transforms.h>
+#include <ros/package.h>
 
 
 using namespace std;
@@ -42,6 +43,15 @@ public:
     m_release_3d.x = release_x;
     m_release_3d.y = release_y;
     m_release_3d.z = release_z;
+    m_recording = false;
+    m_recording_idx = 0;
+  }
+
+  std::string zero_pad(long num, int length) {
+    std::string num_str = std::to_string(num);
+    int zeros_to_prepend = length - num_str.length();
+    num_str.insert(0, zeros_to_prepend, '0');
+    return num_str;
   }
 
   void cloud_cb (const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud_ptr_) {
@@ -112,8 +122,49 @@ public:
 
       circle(m_img, m_grip_point, 10, Scalar(0, 0, 255), 4);
       circle(m_img, m_release_point, 10, Scalar(255, 0, 0), 4);
-      imshow("Cam UI", m_img);
-      char c = waitKey(50);
+      if (m_recording) {
+        circle(m_img, Point(20, 20), 10, Scalar(0, 0, 255), -1);
+        stringstream img_bgr_filename;
+        img_bgr_filename << m_record_dir << "/" << "aligned_rgb_" << zero_pad(m_recording_idx, 5) << ".png";
+        stringstream img_x_filename;
+        img_x_filename << m_record_dir << "/" << "raw_point_" << zero_pad(m_recording_idx, 5) << "_X.png";
+        stringstream img_y_filename;
+        img_y_filename << m_record_dir << "/" << "raw_point_" << zero_pad(m_recording_idx, 5) << "_Y.png";
+        stringstream img_z_filename;
+        img_z_filename << m_record_dir << "/" << "raw_point_" << zero_pad(m_recording_idx, 5) << "_Z.png";
+
+        Mat img_bgr, img_x, img_y, img_z;
+        CommonTools::get_cloud_projections(cloud_ptr, voxel2pixel, img_bgr, img_x, img_y, img_z);
+
+        imwrite(img_bgr_filename.str(), img_bgr);
+
+        imwrite(img_x_filename.str(), img_x);
+        imwrite(img_y_filename.str(), img_y);
+        imwrite(img_z_filename.str(), img_z);
+
+        m_recording_idx++;
+      } else {
+        rectangle(m_img, Point(10, 10), Point(30, 30), Scalar(255, 0, 0), -1);
+        m_recording_idx = 0;
+      }
+      imshow("Camera Live Stream", m_img);
+      char c = waitKey(10);
+      if (c == 'r') {
+        m_recording = true;
+        if (CommonTools::check_mkdir(m_record_dir)) {
+          cout << "Created " << m_record_dir << endl;
+        } else {
+          for (boost::filesystem::directory_iterator end_dir_it, it(m_record_dir); it!=end_dir_it; ++it) {
+            boost::filesystem::remove_all(it->path());
+          }
+          cout << "Replaced " << m_record_dir << endl;
+        }
+        cout << "[recording]" << endl;
+      } else if (c == 's') {
+        m_recording = false;
+        cout << "[stop]" << endl;
+      }
+      waitKey(10);
 
       if (m_do_fold) {
         PointT grip_3d = CommonTools::get_3d_approx(m_grip_point, m_img.size(), pixel2voxel, cloud_ptr);
@@ -142,7 +193,6 @@ public:
         ros::spinOnce();
         m_do_fold = false;
       }
-
 
       m_cloud_mutex.unlock();
     }
@@ -177,7 +227,8 @@ public:
     }
   }
 
-  CameraPointer(string kinect_topic) {
+  CameraPointer(string kinect_topic, string record_dir) {
+    m_record_dir = record_dir;
     m_use_3d_points = false;
     m_subscriber = m_n.subscribe(m_n.resolveName(kinect_topic), 1, &CameraPointer::cloud_cb, this);
     m_subscriber2 = m_n.subscribe("/vcla/cloth_folding/grip_release", 1000, &CameraPointer::grip_release_cb, this);
@@ -233,6 +284,10 @@ private:
   PointT m_release_3d;
   bool m_use_3d_points;
 
+  string m_record_dir;
+  bool m_recording;
+  int m_recording_idx;
+
   tf::Transform m_kinect2_ex_tf;
 };
 
@@ -248,7 +303,9 @@ int main(int argc, char **argv) {
   Document json;
   json.ParseStream(is);
 
-  CameraPointer camera_tool(json["kinect_topic"].GetString());
+  String record_dir = ros::package::getPath("fluent_extractor") + "/" + json["record_dir"].GetString();
+
+  CameraPointer camera_tool(json["kinect_topic"].GetString(), record_dir);
 
   ros::spin();
 

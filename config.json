@@ -6,6 +6,8 @@
     "start_frame_idx": 0,
     "use_kinect": false,
     "kinect_topic": "/kinect2/sd/points",
+    "record_dir": "recording_1",
+    "use_recording": true,
     "loop_mode": false,
     "fluents_directory": "fluents"
 }
