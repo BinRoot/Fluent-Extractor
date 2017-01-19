@@ -67,9 +67,14 @@ if __name__ == '__main__':
 
     assert len(train) == NUM_TRAIN and len(validate) == NUM_CV and len(test) == NUM_TEST
 
+    write_rows('train.dat', train)
+    write_rows('validate.dat', validate)
+    write_rows('test.dat', test)
+
     # Prepare model directory
     if not os.path.exists('./models'):
         os.makedirs('./models')
+
 
     # Grid search of optimal parameters
     grid_search(train, validate)
