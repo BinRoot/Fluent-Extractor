@@ -45,9 +45,21 @@ train_x, test_x, train_y, test_y = cross_validate(X, Y, Z, testing)
 # print len(train_y)
 # print len(test_y)
 
-# Cross validation variables: C, gamma
+# Cross validation variables:
+# * C (float; penalty parm C of the error term)
+# * epsilon (float; epsilon-tube when no penalty assocated with training loss function)
+# * kernel (string; specifies kernel  type to be used in algorithm)
+# * degree (int; degree of the polynomial kernel function)
+# * gamma (float; kernel coefficient for 'rbf', 'poly', 'sigmoid')
+# * coef0 (float; indie term in kernel function)
+# * shrinking (boolean; whether to use shrinking heuristic)
+# * tol (float; tolerance for stopping criterion)
+# * cache_size (float; specify the size of kernel cache)
+# * verbose (bool; enable verbose output)
+# * max_iter (int; hard limit on iterations within solver)
 C = [1e-2, 1e-1, 1e0, 1e1, 1e2]
 gamma = [1e-2, 1e-1, 1e0, 1e1, 1e2]
+
 min_error = float("inf")
 C_ret = 0
 gamma_ret = 0
