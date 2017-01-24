@@ -84,7 +84,7 @@ def draw_arrows(ax, arrows, color='k'):
         prev_arrow = arrow
 
 if __name__ == '__main__':
-    # svr_rbf = SVR(kernel='rbf', C=2e1, gamma=1e-1, epsilon=4e0, shrinking=False)
+    # svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1e-1, epsilon=1e0, shrinking=True)
     svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1.0)
     mds = sklearn.manifold.MDS(n_components=2)
 
