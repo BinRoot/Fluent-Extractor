@@ -84,7 +84,8 @@ def draw_arrows(ax, arrows, color='k'):
         prev_arrow = arrow
 
 if __name__ == '__main__':
-    svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1)
+    # svr_rbf = SVR(kernel='rbf', C=2e1, gamma=1e-1, epsilon=4e0, shrinking=False)
+    svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1.0)
     mds = sklearn.manifold.MDS(n_components=2)
 
     dataset, meta_info, all_indices = load_dataset('value_train.dat')
@@ -166,12 +167,12 @@ if __name__ == '__main__':
     # ax_polished.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
     surf = ax_polished.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
     draw_arrows(ax_polished, all_arrows[0])
-    draw_arrows(ax_polished, all_arrows[1])
-    draw_arrows(ax_polished, all_arrows[2])
-    draw_arrows(ax_polished, all_arrows[3])
-    draw_arrows(ax_polished, all_arrows[4])
-    draw_arrows(ax_polished, all_arrows[5])
-    draw_arrows(ax_polished, all_arrows[6])
+    # draw_arrows(ax_polished, all_arrows[1])
+    # draw_arrows(ax_polished, all_arrows[2])
+    # draw_arrows(ax_polished, all_arrows[3])
+    # draw_arrows(ax_polished, all_arrows[4])
+    # draw_arrows(ax_polished, all_arrows[5])
+    # draw_arrows(ax_polished, all_arrows[6])
     # draw_arrows(ax_polished, all_arrows[1])
     fig_polished.colorbar(surf, shrink=0.5, aspect=5)
     # ax.scatter3D(X, Y, Z, c=preds, marker='x')

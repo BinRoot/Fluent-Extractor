@@ -28,6 +28,7 @@ def cross_validate(X, Y, Z, testing):
 	return (train_x, test_x, train_y, test_y)
 
 def mse(pred, test):
+	# print np.shape(pred), np.shape(test)
 	return mean_squared_error(pred, test)
 
 mds = sklearn.manifold.MDS(n_components=2)
@@ -57,30 +58,45 @@ train_x, test_x, train_y, test_y = cross_validate(X, Y, Z, testing)
 # * cache_size (float; specify the size of kernel cache)
 # * verbose (bool; enable verbose output)
 # * max_iter (int; hard limit on iterations within solver)
-C = [1e-2, 1e-1, 1e0, 1e1, 1e2]
-gamma = [1e-2, 1e-1, 1e0, 1e1, 1e2]
+C = [1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2]
+gamma = ['auto', 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2]
+# gamma = [1e-2, 1e-1, 2e-1, 3e-1, 4e-1, 5e-1, 1e0]
+epsilon = [1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2]
+shrinking = [True, False]
+kernel = ['rbf', 'poly']
 
 min_error = float("inf")
+max_error = 0
 C_ret = 0
 gamma_ret = 0
+epislon_ret = 0
+shrinking_ret = False # 0 = False; 1 = True
+kernel_ret = ''
 
 for c in C:
 	for g in gamma:
-		# 1. SVR trained on train_x, train_y using C, g
-		svr_rbf = SVR(kernel='rbf', C=c, gamma=g)
-		# 2. tested on test_x, test_y
-		svr_rbf.fit(train_x, train_y)
-		#    1. predict on test_x using learned SVR to get pred_y
-		pred_y = svr_rbf.predict(test_x)
-		#    2. compute how different pred_y is from test_y (MSE)
-		error = mse(pred_y, test_y)
-		print "MSE for C=%d, gamma=%d: %f" %(c, g, error)
-		#    3. remember C, g values for the learned SVR that performed best
-		if (error < min_error):
-			min_error = error
-			C_ret = c
-			gamma_ret = g
+		for e in epsilon:
+			for s in shrinking:
+				for k in kernel:
+					# 1. SVR trained on train_x, train_y using C, g
+					svr_rbf = SVR(kernel='rbf', C=c, gamma=g, epsilon=e, shrinking=s)
+					# 2. tested on test_x, test_y
+					svr_rbf.fit(train_x, train_y)
+					#    1. predict on test_x using learned SVR to get pred_y
+					pred_y = svr_rbf.predict(test_x)
+					#    2. compute how different pred_y is from test_y (MSE)
+					error = mse(pred_y, test_y)
+					print "MSE for k={}, C={}, gamma={}, epsilon={}, shrinking={}: {}".format(k, c, g, e, s, error)
+					#    3. remember C, g values for the learned SVR that performed best
+					if (error < min_error):
+						min_error = error
+						C_ret = c
+						gamma_ret = g
+						epsilon_ret = e
+						shrinking_ret = s
+						kernel_ret = k
+					if (error > max_error):
+						max_error = error
 
 print "------------------------------------"
-print "Best hyperparameter: C=%f, gamma=%f" %(C_ret, gamma_ret)
-
+print "Min. error: {}; Max. error: {}; Best hyperparameter: kernel={}, C={}, gamma={}, epsilon={}, shrinking={}".format(min_error, max_error, kernel_ret, C_ret, gamma_ret, epsilon_ret, shrinking_ret)
