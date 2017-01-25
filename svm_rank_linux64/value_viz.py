@@ -12,6 +12,7 @@ from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from get_image import load_image
 
 class Arrow3D(FancyArrowPatch):
     def __init__(self, xs, ys, zs, *args, **kwargs):
@@ -85,10 +86,11 @@ def draw_arrows(ax, arrows, color='k'):
         ax.add_artist(arrow_art)
         prev_arrow = arrow
 
-def plotImages(xData, yData, image, ax, z):
-    im = OffsetImage(image, zoom=z)
+def plotImages(xData, yData, meta_info, ax, z):
     artists = []
     for i in range(len(xData)):
+        image = load_image(meta_info[i])
+        im = OffsetImage(image, zoom=z)
         ab = AnnotationBbox(im, (xData[i], yData[i]), xycoords='data', frameon=False)
         artists.append(ax.add_artist(ab))
     ax.update_datalim(np.column_stack([xData, yData]))
@@ -175,9 +177,9 @@ if __name__ == '__main__':
     fig_img = plt.figure()
     ax_img = plt.gca()
     # surf = ax_img.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
-    bird = plt.imread('/home/kfrankc/Desktop/resize_bird.png')
-    plotImages(centroids_x, centroids_y, bird, ax_img, 0.5)
-    surf = ax_img.contourf(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True, alpha=0.5)
+    # bird = plt.imread('/home/kfrankc/Desktop/resize_bird.png')
+    plotImages(centroids_x, centroids_y, meta_info, ax_img, 0.1)
+    surf = ax_img.contourf(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True)
     fig_img.colorbar(surf, shrink=0.5, aspect=5)
     # fig_img.colorbar(surf, shrink=0.5, aspect=5)
     plt.title('Value Landscape with Image')
