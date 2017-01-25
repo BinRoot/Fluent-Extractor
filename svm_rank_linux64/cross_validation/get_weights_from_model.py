@@ -68,9 +68,7 @@ if __name__ == "__main__":
                 w[int(a)] +=float(alpha)*float(v)
         elif i==1:
             if line.find('0')==-1:
-                print 'Not linear Kernel!\n'
-                printOutput = False
-                break
+                print 'Warning; Not linear Kernel! The weights only make sense for linear kernal\n'
         elif i==10:
             if line.find('threshold b')==-1:
                 print "Parsing error!\n"
