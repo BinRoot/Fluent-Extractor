@@ -177,7 +177,7 @@ if __name__ == '__main__':
     # surf = ax_img.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
     bird = plt.imread('/home/kfrankc/Desktop/resize_bird.png')
     plotImages(centroids_x, centroids_y, bird, ax_img, 0.5)
-    surf = ax_img.contourf(X_mesh, Y_mesh, Z_test, facecolors=cm.coolwarm)
+    surf = ax_img.contourf(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True, alpha=0.5)
     fig_img.colorbar(surf, shrink=0.5, aspect=5)
     # fig_img.colorbar(surf, shrink=0.5, aspect=5)
     plt.title('Value Landscape with Image')
