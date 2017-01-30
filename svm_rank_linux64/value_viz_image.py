@@ -88,7 +88,7 @@ def draw_arrows(ax, arrows, bold, color='k'):
             arrow_art = Arrow3D([prev_arrow[0], arrow[0]],
                                 [prev_arrow[1], arrow[1]],
                                 [prev_arrow[2], arrow[2]],
-                                mutation_scale=10, lw=1, arrowstyle='-|>', color=color)
+                                mutation_scale=10, lw=0.5, arrowstyle='-|>', color='grey')
         ax.add_artist(arrow_art)
         prev_arrow = arrow
 
@@ -216,12 +216,11 @@ if __name__ == '__main__':
     surf = ax_polished.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
     draw_arrows(ax_polished, all_arrows[0], 1)
     draw_arrows(ax_polished, all_arrows[1], 0)
-    # draw_arrows(ax_polished, all_arrows[2], 0)
-    # draw_arrows(ax_polished, all_arrows[3], 0)
+    draw_arrows(ax_polished, all_arrows[2], 0)
+    draw_arrows(ax_polished, all_arrows[3], 0)
     # draw_arrows(ax_polished, all_arrows[4], 0)
     # draw_arrows(ax_polished, all_arrows[5], 0)
     # draw_arrows(ax_polished, all_arrows[6], 0)
-    # draw_arrows(ax_polished, all_arrows[1], 0)
     fig_polished.colorbar(surf, shrink=0.5, aspect=5)
     # ax.scatter3D(X, Y, Z, c=preds, marker='x')
     plt.title('Value Landscape')
