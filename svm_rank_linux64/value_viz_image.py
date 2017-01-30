@@ -11,6 +11,9 @@ from sklearn.svm import SVR
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from get_image import load_image
+
 class Arrow3D(FancyArrowPatch):
     def __init__(self, xs, ys, zs, *args, **kwargs):
         FancyArrowPatch.__init__(self, (0,0), (0,0), *args, **kwargs)
@@ -83,8 +86,20 @@ def draw_arrows(ax, arrows, color='k'):
         ax.add_artist(arrow_art)
         prev_arrow = arrow
 
+def plotImages(xData, yData, meta_info, ax, z):
+    artists = []
+    for i in range(len(xData)):
+        image = load_image(meta_info[i])
+        im = OffsetImage(image, zoom=z)
+        ab = AnnotationBbox(im, (xData[i], yData[i]), xycoords='data', frameon=False)
+        artists.append(ax.add_artist(ab))
+    ax.update_datalim(np.column_stack([xData, yData]))
+    ax.autoscale()
+    return artists
+
 if __name__ == '__main__':
-    svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1)
+    # svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1e-1, epsilon=1e0, shrinking=True)
+    svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1.0)
     mds = sklearn.manifold.MDS(n_components=2)
 
     dataset, meta_info, all_indices = load_dataset('value_train.dat')
@@ -123,7 +138,6 @@ if __name__ == '__main__':
     # fig.colorbar(surf, shrink=0.5, aspect=5)
     # plt.show()
 
-
     # compute k-means clusters
     kmeans = sklearn.cluster.KMeans(n_clusters=12)
     preds = kmeans.fit_predict(dataset)
@@ -154,24 +168,35 @@ if __name__ == '__main__':
     ax.scatter3D(centroids_x, centroids_y, centroids_z, color='black', marker='o', s=100)
     for i in range(len(centroids_x)):
         ax.text(centroids_x[i], centroids_y[i], centroids_z[i], meta_info[i], color='red', zorder=1)
-
-    for i in range(len(all_arrows)):
-        draw_arrows(ax, all_arrows[i])
-
+    # for i in range(len(all_arrows)):
+    #     draw_arrows(ax, all_arrows[i])
     plt.title('MDS')
     plt.axis('tight')
+
+    # draw images on separate graph
+    fig_img = plt.figure()
+    ax_img = plt.gca()
+    # surf = ax_img.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
+    # bird = plt.imread('/home/kfrankc/Desktop/resize_bird.png')
+    plotImages(centroids_x, centroids_y, meta_info, ax_img, 0.05)
+    surf = ax_img.contourf(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+    fig_img.colorbar(surf, shrink=0.5, aspect=5)
+    # fig_img.colorbar(surf, shrink=0.5, aspect=5)
+    plt.title('Value Landscape with Image')
+    plt.axis('tight')
+
 
     fig_polished = plt.figure()
     ax_polished = Axes3D(fig_polished)
     # ax_polished.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
     surf = ax_polished.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
-    # draw_arrows(ax_polished, all_arrows[0])
+    draw_arrows(ax_polished, all_arrows[0])
     # draw_arrows(ax_polished, all_arrows[1])
     # draw_arrows(ax_polished, all_arrows[2])
     # draw_arrows(ax_polished, all_arrows[3])
     # draw_arrows(ax_polished, all_arrows[4])
     # draw_arrows(ax_polished, all_arrows[5])
-    draw_arrows(ax_polished, all_arrows[6])
+    # draw_arrows(ax_polished, all_arrows[6])
     # draw_arrows(ax_polished, all_arrows[1])
     fig_polished.colorbar(surf, shrink=0.5, aspect=5)
     # ax.scatter3D(X, Y, Z, c=preds, marker='x')
