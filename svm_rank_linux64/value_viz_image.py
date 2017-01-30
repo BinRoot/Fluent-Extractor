@@ -65,7 +65,7 @@ def load_dataset(filename):
 
 def compute_values(train_filename):
     prediction_file = 'value_predictions'
-    infer_cmd = "./svm_rank_classify {} value_model {}".format(train_filename, prediction_file)
+    infer_cmd = "./svm_rank_classify {} value2_model {}".format(train_filename, prediction_file)
     process = subprocess.Popen(infer_cmd, shell=True, stdout=subprocess.PIPE)
     process.wait()
 
@@ -76,14 +76,26 @@ def compute_values(train_filename):
     return np.asarray(vals)
 
 
-def draw_arrows(ax, arrows, color='k'):
+def draw_arrows(ax, arrows, bold, color='k'):
     prev_arrow = arrows[0]
     for arrow in arrows[1:]:
-        arrow_art = Arrow3D([prev_arrow[0], arrow[0]],
-                            [prev_arrow[1], arrow[1]],
-                            [prev_arrow[2], arrow[2]],
-                            mutation_scale=10, lw=1.5, arrowstyle='-|>', color=color)
+        if (bold == 1):
+            arrow_art = Arrow3D([prev_arrow[0], arrow[0]],
+                                [prev_arrow[1], arrow[1]],
+                                [prev_arrow[2], arrow[2]],
+                                mutation_scale=10, lw=3, arrowstyle='-|>', color=color)
+        else:
+            arrow_art = Arrow3D([prev_arrow[0], arrow[0]],
+                                [prev_arrow[1], arrow[1]],
+                                [prev_arrow[2], arrow[2]],
+                                mutation_scale=10, lw=1, arrowstyle='-|>', color=color)
         ax.add_artist(arrow_art)
+        prev_arrow = arrow
+
+def draw_arrows2D(ax, arrows, color='k'):
+    prev_arrow = arrows[0]
+    for arrow in arrows[1:]:
+        ax.arrow(prev_arrow[0], prev_arrow[1], arrow[0]-prev_arrow[0], arrow[1]-prev_arrow[1], head_width=0.2, head_length=0.2, fc='k', ec='k')
         prev_arrow = arrow
 
 def plotImages(xData, yData, meta_info, ax, z):
@@ -109,11 +121,15 @@ if __name__ == '__main__':
     Z = compute_values('value_train.dat')
 
     all_arrows = []
+    all_arrows2D = []
     for indices in all_indices:
         arrows = []
+        arrows2D =[]
         for x, y, z in zip(coordinates[indices, 0], coordinates[indices, 1], Z[indices]):
             arrows.append([x, y, z])
+            arrows2D.append([x, y])
         all_arrows.append(arrows)
+        all_arrows2D.append(arrows2D)
 
     # regression on [[x, y], ... ] -> [z, ...]
     train_source = [[x, y] for x, y in zip(X, Y)]
@@ -178,8 +194,16 @@ if __name__ == '__main__':
     ax_img = plt.gca()
     # surf = ax_img.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
     # bird = plt.imread('/home/kfrankc/Desktop/resize_bird.png')
-    plotImages(centroids_x, centroids_y, meta_info, ax_img, 0.05)
+    # plotImages(centroids_x, centroids_y, meta_info, ax_img, 0.05)
+    print all_arrows2D[0]
+    x_img = [i[0] for i in all_arrows2D[0]]
+    y_img = [i[1] for i in all_arrows2D[0]]
+    plotImages(x_img, y_img, meta_info, ax_img, 0.05)
     surf = ax_img.contourf(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+    
+    # draw arrows on 2D
+    draw_arrows2D(ax_img, all_arrows2D[0])
+    
     fig_img.colorbar(surf, shrink=0.5, aspect=5)
     # fig_img.colorbar(surf, shrink=0.5, aspect=5)
     plt.title('Value Landscape with Image')
@@ -190,14 +214,14 @@ if __name__ == '__main__':
     ax_polished = Axes3D(fig_polished)
     # ax_polished.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
     surf = ax_polished.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
-    draw_arrows(ax_polished, all_arrows[0])
-    # draw_arrows(ax_polished, all_arrows[1])
-    # draw_arrows(ax_polished, all_arrows[2])
-    # draw_arrows(ax_polished, all_arrows[3])
-    # draw_arrows(ax_polished, all_arrows[4])
-    # draw_arrows(ax_polished, all_arrows[5])
-    # draw_arrows(ax_polished, all_arrows[6])
-    # draw_arrows(ax_polished, all_arrows[1])
+    draw_arrows(ax_polished, all_arrows[0], 1)
+    draw_arrows(ax_polished, all_arrows[1], 0)
+    # draw_arrows(ax_polished, all_arrows[2], 0)
+    # draw_arrows(ax_polished, all_arrows[3], 0)
+    # draw_arrows(ax_polished, all_arrows[4], 0)
+    # draw_arrows(ax_polished, all_arrows[5], 0)
+    # draw_arrows(ax_polished, all_arrows[6], 0)
+    # draw_arrows(ax_polished, all_arrows[1], 0)
     fig_polished.colorbar(surf, shrink=0.5, aspect=5)
     # ax.scatter3D(X, Y, Z, c=preds, marker='x')
     plt.title('Value Landscape')
