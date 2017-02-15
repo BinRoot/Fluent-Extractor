@@ -212,7 +212,7 @@ if __name__ == '__main__':
 
     fig_polished = plt.figure()
     ax_polished = Axes3D(fig_polished)
-    ax_polished.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
+    # ax_polished.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
     # ax_polished.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
     surf = ax_polished.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
     draw_arrows(ax_polished, all_arrows[0], 1)
