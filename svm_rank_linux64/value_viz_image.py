@@ -13,6 +13,9 @@ from mpl_toolkits.mplot3d import proj3d
 
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from get_image import load_image
+from random import uniform
+
+from sklearn.metrics.pairwise import euclidean_distances
 
 class Arrow3D(FancyArrowPatch):
     def __init__(self, xs, ys, zs, *args, **kwargs):
@@ -73,7 +76,8 @@ def compute_values(train_filename):
         val_lines = f.readlines()
 
     vals = map(float, val_lines)
-    return np.asarray(vals)
+    vals_array = np.asarray(vals)
+    return vals_array
 
 
 def draw_arrows(ax, arrows, bold, color='k'):
@@ -109,6 +113,33 @@ def plotImages(xData, yData, meta_info, ax, z):
     ax.autoscale()
     return artists
 
+def randPts(centroids_x, centroids_y, Z, dist, N, penalty):
+    count = 0;
+    rand_x = []
+    rand_y = []
+    rand_z = []
+    min_z = min(Z);
+    print min_z;
+
+    while (count < N):
+        tmp = True
+        xyr = np.array((uniform(-10, 10), uniform(-10, 10)));
+        for x, y in zip(centroids_x, centroids_y):
+            xy = np.array(x, y)
+            d = np.linalg.norm(xyr - xy)
+            if (d > dist):
+                continue
+            else:
+                tmp = False
+                break
+        if tmp:
+            # print x, y
+            rand_x.append(xyr[0])
+            rand_y.append(xyr[1])
+            rand_z.append(min_z - penalty)
+            count = count + 1
+    return rand_x, rand_y, rand_z
+
 if __name__ == '__main__':
     # svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1e-1, epsilon=1e0, shrinking=True)
     svr_rbf = SVR(kernel='rbf', C=1e1, gamma=1.0)
@@ -130,29 +161,6 @@ if __name__ == '__main__':
             arrows2D.append([x, y])
         all_arrows.append(arrows)
         all_arrows2D.append(arrows2D)
-
-    # regression on [[x, y], ... ] -> [z, ...]
-    train_source = [[x, y] for x, y in zip(X, Y)]
-
-    train_target = Z
-
-    svr_rbf.fit(train_source, train_target)
-
-    X_test = np.linspace(np.min(X), np.max(X), num=33)
-    Y_test = np.linspace(np.min(Y), np.max(Y), num=33)
-
-    X_mesh, Y_mesh = np.meshgrid(X_test, Y_test)
-
-    test_source = [[x, y] for x, y in zip(np.ravel(X_mesh), np.ravel(Y_mesh))]
-    test_target = svr_rbf.predict(test_source)
-    Z_test = test_target.reshape(X_mesh.shape)
-
-    fig = plt.figure()
-    ax = Axes3D(fig)
-    stride = (np.max(X) - np.min(X)) / 10.
-    surf = ax.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True, alpha=0.5)
-    # fig.colorbar(surf, shrink=0.5, aspect=5)
-    # plt.show()
 
     # compute k-means clusters
     kmeans = sklearn.cluster.KMeans(n_clusters=12)
@@ -177,6 +185,41 @@ if __name__ == '__main__':
     centroids_y = np.asarray(centroids_y)
     centroids_z = np.asarray(centroids_z)
 
+    # Generate N random points that are far away from current centroids by euclidean distance
+    # parameter dist
+    dist = 4
+    N = 100;
+    penalty = 1;
+    rand_x, rand_y, rand_z = randPts(centroids_x, centroids_y, Z, dist, N, penalty);
+    # print rand_x, rand_y, rand_z
+
+    X = np.concatenate((X, rand_x), axis=0)
+    Y = np.concatenate((Y, rand_y), axis=0)
+    Z = np.concatenate((Z, rand_z), axis=0)
+
+    # regression on [[x, y], ... ] -> [z, ...]
+    train_source = [[x, y] for x, y in zip(X, Y)]
+
+    train_target = Z
+
+    svr_rbf.fit(train_source, train_target)
+
+    X_test = np.linspace(np.min(X), np.max(X), num=33)
+    Y_test = np.linspace(np.min(Y), np.max(Y), num=33)
+
+    X_mesh, Y_mesh = np.meshgrid(X_test, Y_test)
+
+    test_source = [[x, y] for x, y in zip(np.ravel(X_mesh), np.ravel(Y_mesh))]
+    test_target = svr_rbf.predict(test_source)
+    Z_test = test_target.reshape(X_mesh.shape)
+
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    stride = (np.max(X) - np.min(X)) / 10.
+    surf = ax.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True, alpha=0.5)
+    # fig.colorbar(surf, shrink=0.5, aspect=5)
+    # plt.show()
+
     # fig = plt.figure()
     # ax = Axes3D(fig)
     ax.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
@@ -195,7 +238,7 @@ if __name__ == '__main__':
     # surf = ax_img.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.1, antialiased=True, alpha=0.68)
     # bird = plt.imread('/home/kfrankc/Desktop/resize_bird.png')
     # plotImages(centroids_x, centroids_y, meta_info, ax_img, 0.05)
-    print all_arrows2D[0]
+    # print all_arrows2D[0]
     x_img = [i[0] for i in all_arrows2D[0]]
     y_img = [i[1] for i in all_arrows2D[0]]
     plotImages(x_img, y_img, meta_info, ax_img, 0.05)
