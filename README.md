@@ -13,6 +13,7 @@ There are 2 nodes:
   Install `pcl_ros` as well as `pcl`
   - Install `pcl_ros` in Kinetic: `sudo apt-get install ros-kinetic-pcl-ros`
   - Install `pcl` in Ubuntu 16.04: https://larrylisky.com/2016/11/03/point-cloud-library-on-ubuntu-16-04-lts/
+  - Install `cv_bridge` by `sudo apt-get install ros-kinetic-cv-bridge`
 
 2. Follow steps 1-3 http://sdk.rethinkrobotics.com/wiki/Workstation_Setup
 

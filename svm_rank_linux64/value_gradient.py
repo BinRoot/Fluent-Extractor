@@ -2,6 +2,7 @@ import numpy as np
 import subprocess, os
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
+from matplotlib.pyplot import cm
 
 def load_dataset(filename):
     """
@@ -25,7 +26,7 @@ def load_dataset(filename):
         vid_idx = line_arr[1].split(':')[1]
         if prev_vid_idx is None:
             indices = []
-        elif prev_vid_idx != vid_idx:
+        elif prev_vid_idx != vid_idx or line_idx == len(lines) - 1:
             all_indices.append(indices)
             indices = []
         indices.append(line_idx)
@@ -54,7 +55,7 @@ def save_to_dat(filename, data):
 
 def compute_values(train_filename):
     prediction_file = 'value_predictions'
-    infer_cmd = "./svm_rank_classify {} value_model {}".format(train_filename, prediction_file)
+    infer_cmd = "./svm_rank_classify {} value2_model {}".format(train_filename, prediction_file)
     process = subprocess.Popen(infer_cmd, shell=True, stdout=subprocess.PIPE)
     process.wait()
 
@@ -120,24 +121,46 @@ def start_interpolation(start_f, end_f):
     return predictions
 
 
-def start_interpolations(plt_title, indices, dataset, meta_info):
-    plt.figure()
-    plt.ylabel('Value')
-    plt.title(plt_title)
+def start_interpolations(indices, dataset, meta_info):
     start_idx = indices[0]
     plot_x_size = 0
+    list_of_plots = []
     for end_idx in indices[1:]:
         predictions = start_interpolation(dataset[start_idx, :], dataset[end_idx, :])
         xs = list(range(plot_x_size, plot_x_size + len(predictions)))
-        print(np.shape(xs), np.shape(predictions))
-        plt.plot(xs, predictions, c=np.random.rand(3, 1))
+        list_of_plots.append((xs, predictions))
         plot_x_size += len(predictions)
-        plt.pause(0.05)
         start_idx = end_idx
+    return list_of_plots
+
+
+def plot_all_interpolations(all_indices, dataset, meta_info):
+    plt.figure()
+    plt.suptitle('Value over time in cloth folding videos')
+    colors = cm.rainbow(np.linspace(0, 1, 7))
+    for i in range(len(all_indices)):
+        ax2 = plt.subplot(9, 5, i + 1)
+        subplot_title = 'Video {}'.format(i + 1)
+        print('plotting {}'.format(subplot_title))
+        # plt.title(subplot_title)
+        plt.text(0.5, 0.8, subplot_title,
+                 horizontalalignment='center',
+                 fontsize=8,
+                 transform=ax2.transAxes)
+        plt.xticks([])
+        # plt.yticks(np.arange(-10, 25, 5))
+        # plt.ylim([-10, 25])
+        plt.yticks(np.arange(-0.5, 1.5, 0.5))
+        plt.ylim([-0.5, 1.5])
+        list_of_plots = \
+            start_interpolations(all_indices[i], dataset, meta_info)
+        for plot_idx, (xs, predictions) in enumerate(list_of_plots):
+            plt.plot(xs, predictions, c=colors[plot_idx], lw=3)
+        plt.pause(0.2)
     plt.show()
 
 if __name__ == '__main__':
     dataset, meta_info, all_indices = load_dataset('value_train.dat')
     # start_ascent(all_indices[0], dataset, meta_info)
-    for i in range(len(all_indices)):
-        start_interpolations('Video {}'.format(i), all_indices[i], dataset, meta_info)
+    plot_all_interpolations(all_indices, dataset, meta_info)
+

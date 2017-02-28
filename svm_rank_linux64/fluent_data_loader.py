@@ -2,6 +2,7 @@ from collections import defaultdict
 import numpy as np
 from sklearn import preprocessing
 from matplotlib import pyplot as plt
+import subprocess, os
 
 
 class DataLoader:
@@ -9,14 +10,32 @@ class DataLoader:
                  action_dataset_filename='action_dataset.txt',
                  value_dataset_filename='value_train.dat'):
         self._actions = self._load_action_dataset(action_dataset_filename)
-        dataset, self._meta_info, self._all_indices = \
+        self._dataset, self._meta_info, self._all_indices = \
             self._load_dataset(value_dataset_filename)
-        self._scaler = preprocessing.StandardScaler().fit(dataset)
-        self._dataset_normalized = self._scaler.transform(dataset)
+        self._scaler = preprocessing.StandardScaler().fit(self._dataset)
+        self._dataset_normalized = self._scaler.transform(self._dataset)
         self._meta_to_label = {}
         for action_label, metas in self._actions.items():
             for meta in metas:
                 self._meta_to_label[meta] = action_label
+        self._values = self.load_values()
+
+    def get_fluents_from_meta(self, meta):
+        idx = self._meta_info.index(meta)
+        if idx == -1:
+            return None
+        return self._dataset_normalized[idx, :]
+
+    def get_value_from_meta(self, meta, model_file=None):
+        idx = self._meta_info.index(meta)
+        if idx == -1:
+            return None
+
+        values = self._values \
+            if model_file is None \
+            else self.load_values(model_filename=model_file)
+
+        return values[idx]
 
     def load_action_data(self):
         action_data_f_start = defaultdict(lambda: [])
@@ -38,8 +57,40 @@ class DataLoader:
         for action_label in action_data_f_start.keys():
             action_data_f_start[action_label] = np.asarray(action_data_f_start[action_label])
             action_data_f_end[action_label] = np.asarray(action_data_f_end[action_label])
-            action_data[action_label] = (action_data_f_start[action_label], action_data_f_end[action_label])
+            action_data[action_label] = (action_data_f_start[action_label], action_data_f_end[action_label] - action_data_f_start[action_label])
         return action_data
+
+    def get_values(self):
+        return self._values
+
+    @staticmethod
+    def load_values(train_filename='value_train.dat', model_filename='value_model'):
+        prediction_file = 'value_predictions'
+        infer_cmd = "./svm_rank_classify {} {} {}".format(train_filename, model_filename, prediction_file)
+        process = subprocess.Popen(infer_cmd, shell=True, stdout=subprocess.PIPE)
+        process.wait()
+
+        with open(os.path.join(prediction_file), 'r') as f:
+            val_lines = f.readlines()
+
+        vals = map(float, val_lines)
+        return np.asarray(vals)
+
+    def get_start_fluents(self):
+        start_fluents = []
+        for indices in self._all_indices:
+            start_idx = indices[0]
+            start_fluent = self._dataset_normalized[start_idx, :]
+            start_fluents.append(start_fluent)
+        return start_fluents
+
+    def get_end_fluents(self):
+        end_fluents = []
+        for indices in self._all_indices:
+            end_idx = indices[-1]
+            end_fluent = self._dataset_normalized[end_idx, :]
+            end_fluents.append(end_fluent)
+        return end_fluents
 
     def get_goal(self, vid_id):
         """

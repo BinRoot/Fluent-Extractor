@@ -254,13 +254,14 @@ vector<float> FluentCalc::calc_keypoints(CloudPtr cloud) {
     iss_detector.setNumberOfThreads(1);
     iss_detector.setInputCloud(cloud);
     iss_detector.compute(*keypoints);
- 
-    for (int i=0; i<keypoints->points.size(); i++) {
-        fluents.push_back(points[i].x);
-        fluents.push_back(points[i].y);
-        fluents.push_back(points[i].z);
-    }
 
     vector<float> fluents;
+
+    for (int i=0; i<keypoints->points.size(); i++) {
+        fluents.push_back(keypoints->points[i].x);
+        fluents.push_back(keypoints->points[i].y);
+        fluents.push_back(keypoints->points[i].z);
+    }
+
     return fluents;
 }

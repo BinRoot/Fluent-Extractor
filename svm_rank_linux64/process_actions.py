@@ -3,6 +3,9 @@ from sklearn import preprocessing
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from scipy.optimize import minimize
+import subprocess, os
+import matplotlib as mpl
+import scipy.misc
 
 def load_dataset(filename):
     """
@@ -91,7 +94,7 @@ def plot_actions_per_video(all_indices, dataset_normalized):
     plt.show()
 
 
-def plot_actions(dataset_normalized, meta_info, actions):
+def plot_actions(dataset_normalized, meta_info, actions, values):
     action_to_df = {}
     meta_to_label = {}
     for action_label, metas in actions.items():
@@ -100,29 +103,47 @@ def plot_actions(dataset_normalized, meta_info, actions):
 
     action_data = defaultdict(lambda: [])
     action_data_for_plot = defaultdict(lambda: [])
+    action_data_values = defaultdict(lambda: [])
     for idx, indices in enumerate(all_indices):
         diffs = process_video(dataset_normalized[indices, :])
         # each row of diffs, gives a diff, meta, and precondition
         # make a map action_label -> [[precondition, diff], ...]
         prev_meta = meta_info[indices[0]]
         prev_fluent = dataset_normalized[indices[0]]
+        prev_value = values[indices[0]]
         for j, i in enumerate(indices[1:]):
             meta = meta_info[i]
             fluent = dataset_normalized[i, :]
+            curr_value = values[i]
             meta_diff = '{}-{}'.format(prev_meta, meta)
             if meta_diff in meta_to_label:
+                print('{} value change {}'.format(meta_diff, curr_value - prev_value))
+                value_change = curr_value - prev_value
                 action_label = meta_to_label[meta_diff]
-                action_data_for_plot[action_label].append(np.hstack((prev_fluent, [float("inf")], diffs[j], [float("inf")], fluent)))
+                action_data_values[action_label].append(value_change)
+                action_data_for_plot[action_label].append(np.hstack((prev_fluent, [-float("inf")], diffs[j])))
                 action_data[action_label].append(diffs[j])
             prev_meta = meta
             prev_fluent = fluent[:]
+            prev_value = curr_value
 
     plt.figure()
-    plt.title('Fluent changes caused by actions')
+    plt.suptitle('Fluent changes caused by actions')
     for idx, (action_label, metas) in enumerate(actions.items()):
         plt.subplot(4, 3, idx + 1)
-        plt.title(action_label)
-        plt.imshow(action_data_for_plot[action_label], vmin=-3, vmax=3, interpolation='nearest')
+        mean_str = np.mean(action_data_values[action_label])
+        std_str = np.std(action_data_values[action_label])
+        plt.title('{} (+{:.1f}, {:.1f})'.format(action_label, mean_str, std_str))
+        plt.imshow(action_data_for_plot[action_label], vmin=-4, vmax=4, interpolation='nearest')
+        pil_img = scipy.misc.toimage(action_data_for_plot[action_label], cmin=-4, cmax=4)
+
+        action_img_file = 'action_{}.png'.format(action_label)
+        data = action_data_for_plot[action_label]
+        cmap = plt.cm.jet
+        norm = plt.Normalize(vmin=-4, vmax=4)
+        image = cmap(norm(data))
+        plt.imsave(action_img_file, image)
+
         vars = np.var(action_data[action_label], axis=0)
         means = np.abs(np.mean(action_data[action_label], axis=0))
         print(action_label)
@@ -155,7 +176,7 @@ def plot_actions(dataset_normalized, meta_info, actions):
         action_to_df[action_label] = solved_x * means
 
     plt.tight_layout()
-    # plt.show()
+    plt.show()
     return action_to_df
 
 
@@ -185,15 +206,28 @@ def infer_actions(start_fluent, end_fluent, action_to_df):
     print(cost, states[min_cost_idx])
 
 
+def load_values(train_filename='value_train.dat'):
+    prediction_file = 'value_predictions'
+    infer_cmd = "./svm_rank_classify {} value_model {}".format(train_filename, prediction_file)
+    process = subprocess.Popen(infer_cmd, shell=True, stdout=subprocess.PIPE)
+    process.wait()
+
+    with open(os.path.join(prediction_file), 'r') as f:
+        val_lines = f.readlines()
+
+    vals = map(float, val_lines)
+    return np.asarray(vals)
+
 if __name__ == '__main__':
     actions = load_action_dataset('action_dataset.txt')
 
     dataset, meta_info, all_indices = load_dataset('value_train.dat')
     scaler = preprocessing.StandardScaler().fit(dataset)
     dataset_normalized = scaler.transform(dataset)
+    values = load_values()
 
     # plot_actions_per_video(all_indices, dataset_normalized)
-    action_to_df = plot_actions(dataset_normalized, meta_info, actions)
+    action_to_df = plot_actions(dataset_normalized, meta_info, actions, values)
 
     idx = 0
     start_fluent = dataset_normalized[all_indices[idx][0], :]

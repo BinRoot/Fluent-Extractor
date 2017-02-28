@@ -27,7 +27,7 @@
 
 #define DEBUG false
 
-using namespace boost::filesystem;
+//using namespace boost::filesystem;
 
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointCloud<PointT> Cloud;

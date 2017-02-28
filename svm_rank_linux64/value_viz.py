@@ -11,6 +11,7 @@ from sklearn.svm import SVR
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 
+
 class Arrow3D(FancyArrowPatch):
     def __init__(self, xs, ys, zs, *args, **kwargs):
         FancyArrowPatch.__init__(self, (0,0), (0,0), *args, **kwargs)
@@ -21,6 +22,7 @@ class Arrow3D(FancyArrowPatch):
         xs, ys, zs = proj3d.proj_transform(xs3d, ys3d, zs3d, renderer.M)
         self.set_positions((xs[0],ys[0]),(xs[1],ys[1]))
         FancyArrowPatch.draw(self, renderer)
+
 
 def load_dataset(filename):
     """
@@ -74,12 +76,15 @@ def compute_values(train_filename):
 
 
 def draw_arrows(ax, arrows, color='k'):
+    lw = 3.5
+    if color == 'gray':
+        lw = 0.5
     prev_arrow = arrows[0]
     for arrow in arrows[1:]:
         arrow_art = Arrow3D([prev_arrow[0], arrow[0]],
                             [prev_arrow[1], arrow[1]],
                             [prev_arrow[2], arrow[2]],
-                            mutation_scale=10, lw=1.5, arrowstyle='-|>', color=color)
+                            mutation_scale=10, lw=lw, arrowstyle='-|>', color=color)
         ax.add_artist(arrow_art)
         prev_arrow = arrow
 
@@ -119,7 +124,7 @@ if __name__ == '__main__':
     fig = plt.figure()
     ax = Axes3D(fig)
     stride = (np.max(X) - np.min(X)) / 10.
-    surf = ax.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True, alpha=0.5)
+    surf = ax.plot_surface(X_mesh, Y_mesh, Z_test, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0, antialiased=True, alpha=0.0)
     # fig.colorbar(surf, shrink=0.5, aspect=5)
     # plt.show()
 
@@ -149,14 +154,17 @@ if __name__ == '__main__':
 
     # fig = plt.figure()
     # ax = Axes3D(fig)
-    ax.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
+    # ax.scatter3D(X, Y, Z, c=Z, marker='.', s=40)
     # ax.scatter3D(X, Y, Z, c=preds, marker='x')
-    ax.scatter3D(centroids_x, centroids_y, centroids_z, color='black', marker='o', s=100)
-    for i in range(len(centroids_x)):
-        ax.text(centroids_x[i], centroids_y[i], centroids_z[i], meta_info[i], color='red', zorder=1)
+    # ax.scatter3D(centroids_x, centroids_y, centroids_z, color='black', marker='o', s=100)
+    # for i in range(len(centroids_x)):
+    #     ax.text(centroids_x[i], centroids_y[i], centroids_z[i], meta_info[i], color='red', zorder=1)
 
     for i in range(len(all_arrows)):
-        draw_arrows(ax, all_arrows[i])
+        if i == 0:
+            draw_arrows(ax, all_arrows[i])
+        else:
+            draw_arrows(ax, all_arrows[i], color='gray')
 
     plt.title('MDS')
     plt.axis('tight')
