@@ -80,12 +80,14 @@ public:
         m_xdisplay_pub.publish(*msg);
         waitKey(100);
         return;
+      } else {
+        cout << "no obstacle" << endl;
       }
 
 
       Mat img_masked;
       img_bgr.copyTo(img_masked, m_table_mask);
-      Mat img_seg = m_seg2D.seg(img_masked, 0.5, 2000, 50);
+      Mat img_seg = m_seg2D.seg(img_masked, 0.5, 5000, 100);
 
 
       imshow("img_seg", img_seg);
@@ -102,11 +104,15 @@ public:
       int table_2d_area = cv::countNonZero(m_table_mask);
 
       for (int i = 0; i < components.size(); i++) {
+//          cout << "component " << i << " / " << components.size() << endl;
+
         // don't allow small components
+//          cout << "don't allow small components..." << endl;
         if (components[i].size() < 200) continue;
 
 
         // midpoint of component should be in table_mask
+//          cout << "midpoint of component should be in table_mask..." << endl;
         Mat component_img = Mat::zeros(img_bgr.size(), CV_8U);
         Point2i midpoint(0, 0);
         for (cv::Point2i p : components[i]) {
@@ -120,6 +126,7 @@ public:
         if (table_mask_eroded.at<uchar>(midpoint.y, midpoint.x) == 0) continue;
 
         // component outline should not be too similar to table
+//          cout << "component outline should not be too similar to table..." << endl;
         vector<Point> hull;
         convexHull(components[i], hull);
         vector<vector<Point>> hulls;
@@ -143,11 +150,13 @@ public:
 //        waitKey(100);
 
         // component size should not be bigger than table
+//          cout << "component size should not be bigger than table" << endl;
         if (components[i].size() > 0.95 * table_2d_area) {
           continue;
         }
 
         // eroding it shouldn't make it disappear
+//          cout << "eroding it shouldn't make it disappear..." << endl;
         Mat eroded_component = component_img.clone();
         CommonTools::erode(eroded_component, 10);
         if (cv::countNonZero(eroded_component) < 10) {
@@ -155,6 +164,7 @@ public:
         }
 
         // save the biggest component
+//          cout << "save the biggest component..." << endl;
         if (components[i].size() > max_component_size) {
           max_component_size = components[i].size();
           max_component_img = component_img.clone();
@@ -165,13 +175,16 @@ public:
       if (max_component_size > 0) {
         stringstream cloth_filename;
         cloth_filename << "out/cloth_mask_" << img_idx << ".png";
+//          cout << "writing " << cloth_filename.str() << " " << max_component_img.size() << endl;
         imwrite(cloth_filename.str(), max_component_img);
 
-        stringstream rgb_filename;
-        rgb_filename << "out/img_" << img_idx << ".png";
-        imwrite(rgb_filename.str(), img_bgr);
+//        stringstream rgb_filename;
+//        rgb_filename << "out/img_" << img_idx << ".png";
+//        imwrite(rgb_filename.str(), img_bgr);
 
         cloth_mask = max_component_img.clone();
+      } else {
+        cloth_mask = Mat();
       }
     } else {
       cout << "no table found" << endl;
@@ -186,10 +199,37 @@ public:
 //      CommonTools::dilate_erode(cloth_mask, 3);
 //      CommonTools::draw_contour(cloth_mask, cloth_mask.clone(), cv::Scalar(255));
 
-      imshow("cloth", cloth_mask);
+
+      // find keypoints of cloth
+      int min_x = std::numeric_limits<float>::infinity();
+      int max_x = 0;
+      Point left_p2d(0, 0);
+      Point right_p2d(0, 0);
+      for (int row = 0; row < cloth_mask.rows; row++) {
+          for (int col = 0; col < cloth_mask.cols; col++) {
+              if (cloth_mask.at<uchar>(row, col) == 255) {
+                  if (col < min_x) {
+                      min_x = col;
+                      left_p2d.x = col;
+                      left_p2d.y = row;
+                  }
+                  if (col > max_x) {
+                      max_x = col;
+                      right_p2d.x = col;
+                      right_p2d.y = row;
+                  }
+              }
+          }
+      }
+      cout << "left: " << left_p2d << ", right: " << right_p2d << endl;
 
       Mat cloth_mask_col;
       cvtColor(cloth_mask, cloth_mask_col, CV_GRAY2RGB);
+
+      circle(cloth_mask_col, left_p2d, 15, Scalar(90, 128, 220), 4);
+      circle(cloth_mask_col, right_p2d, 15, Scalar(90, 128, 220), 4);
+      imshow("cloth", cloth_mask_col);
+
       Mat xdisplay_img = CommonTools::xdisplay(cloth_mask_col);
       sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
       m_xdisplay_pub.publish(*msg);
@@ -228,7 +268,6 @@ public:
    
   }
 
-
   void kinect_callback(const CloudConstPtr& cloud_ptr) {
     Mat img;
     int pixel2voxel[cloud_ptr->width * cloud_ptr->height];
@@ -263,7 +302,7 @@ int main(int argc, char **argv) {
   json.ParseStream(is);
 
 
-  ros::Publisher pub = node_handle.advertise<Cloud>("vision_buffer_pcl", 1);
+  ros::Publisher pub = node_handle.advertise<Cloud>("/vcla/cloth_folding/vision_buffer_pcl", 1);
   ros::Publisher xdisplay_pub = node_handle.advertise<sensor_msgs::Image>("/vcla/cloth_folding/vision_buffer", 1);
 
   if (json["use_kinect"].GetBool()) {

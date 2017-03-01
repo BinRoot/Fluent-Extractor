@@ -39,7 +39,7 @@ public:
   void callback(const CloudConstPtr& cloud_const_ptr) {
     cout << "cloud size: " << cloud_const_ptr->size() << endl;
 
-    if (cloud_const_ptr->size() == 0) {
+    if (cloud_const_ptr->size() < 100) {
       return;
     }
     
@@ -173,10 +173,9 @@ public:
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
     cout << "dist from prev fluent: " << dist << endl;
     publish_fluent_vector(fluent_vector);
+    print_fluent_vector(fluent_vector);
 
-//    print_fluent_vector(fluent_vector);
-
-    if (dist > 1) {
+    if (false && dist > 1) {
       cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
       // SAVE  state_img, debug_img, fluent vector
 
@@ -282,9 +281,9 @@ int main(int argc, char **argv) {
 
   CloudAnalyzer cloud_analyzer(pub, pub_ui);
 
-  ros::Subscriber sub = node_handle.subscribe<Cloud>("vision_buffer_pcl", 1, &CloudAnalyzer::callback, &cloud_analyzer);
+  ros::Subscriber sub = node_handle.subscribe<Cloud>("/vcla/cloth_folding/vision_buffer_pcl", 1, &CloudAnalyzer::callback, &cloud_analyzer);
 
-  ros::Subscriber sub2 = node_handle.subscribe("/vcla/cloth_folding/hoi_action", 1000, &CloudAnalyzer::callback_hoi, &cloud_analyzer);
+  ros::Subscriber sub2 = node_handle.subscribe("/vcla/cloth_folding/hoi_action", 1, &CloudAnalyzer::callback_hoi, &cloud_analyzer);
 
 
   // outfile << step_number++ << " qid:" << json["vid_idx"].GetInt() << " 1:" << cloth_feature[0] << " 2:" << cloth_feature[1] << endl;

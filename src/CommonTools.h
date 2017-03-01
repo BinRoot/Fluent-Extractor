@@ -361,7 +361,7 @@ public:
     static cv::Mat grab_cut_segmentation(cv::Mat& img, cv::Mat& mask) {
       cv::Mat bg_model, fg_model;
       cv::Mat result = mask.clone();
-      CommonTools::erode(result, 10);
+      CommonTools::erode(result, 5);
       result = (result / 255) * cv::GC_PR_FGD;
 
       cv::Mat background = mask.clone();

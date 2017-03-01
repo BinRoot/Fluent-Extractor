@@ -4,10 +4,10 @@
     "vid_idx_start": 42,
     "vid_idx_end": 45,
     "start_frame_idx": 0,
-    "use_kinect": false,
+    "use_kinect": true,
     "kinect_topic": "/kinect2/sd/points",
     "record_dir": "recording_1",
-    "use_recording": true,
+    "use_recording": false,
     "loop_mode": false,
     "fluents_directory": "fluents"
 }

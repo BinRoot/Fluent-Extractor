@@ -621,7 +621,6 @@ class ClothFolder(object):
         rospy.sleep(1.5)
         self.move_arms(left_grip_exit, right_grip_exit)
 
-
     def fold_bottom_to_top(self):
         y_offset = 0.1
         left_grip, right_grip = [0.35, y_offset, 0.028], [0.35, -y_offset, 0.028]
@@ -641,7 +640,6 @@ class ClothFolder(object):
         self.move_arms(left_grip_forward_down, right_grip_forward_down)
         self.open_grips()
         self.move_arms(left_grip_forward, right_grip_forward)
-
 
     def fold_top_to_bottom(self):
         y_offset = 0.1

@@ -1,8 +1,9 @@
+import sys, os
 from collections import defaultdict
 import numpy as np
 from sklearn import preprocessing
 from matplotlib import pyplot as plt
-import subprocess, os
+import subprocess
 
 
 class DataLoader:
@@ -19,6 +20,10 @@ class DataLoader:
             for meta in metas:
                 self._meta_to_label[meta] = action_label
         self._values = self.load_values()
+
+    def normalize(self, fluent_vector):
+        fluent_vector = np.array(fluent_vector)
+        return self._scaler.transform(fluent_vector.reshape(1, -1))[0]
 
     def get_fluents_from_meta(self, meta):
         idx = self._meta_info.index(meta)
