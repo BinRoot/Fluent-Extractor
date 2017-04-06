@@ -4,7 +4,8 @@
 #include <pcl/io/pcd_io.h>
 #include <std_msgs/String.h>
 #include "ros/package.h"
-
+#include <fluent_extractor/ClothSegment.h>
+#include <cv_bridge/cv_bridge.h>
 
 #include "CommonTools.h"
 #include "FluentCalc.h"
@@ -34,6 +35,21 @@ public:
     m_release.x = release_x;
     m_release.y = release_y;
     m_compute_fold = true;
+  }
+
+  void callback_cloth_segment(fluent_extractor::ClothSegment cloth_segment) {
+    cout << "in cloth_segment callback: " << cloth_segment.vid_idx << " " << cloth_segment.img_idx << endl;
+    sensor_msgs::PointCloud2 ros_cloud = cloth_segment.cloud;
+    Cloud cloud;
+    pcl::fromROSMsg(ros_cloud, cloud);
+    cout << "cloud size: " << cloud.size() << endl;
+    sensor_msgs::Image ros_mask = cloth_segment.mask;
+    sensor_msgs::Image ros_img = cloth_segment.img;
+    Mat mask = cv_bridge::toCvCopy(ros_mask, "mono8")->image;
+    Mat img = cv_bridge::toCvCopy(ros_img, "bgr8")->image;
+    imshow("fluent_extractor mask", mask);
+    imshow("fluent_extractor img", img);
+    waitKey(20);
   }
 
   void callback(const CloudConstPtr& cloud_const_ptr) {
@@ -158,6 +174,10 @@ public:
     vector<float> thickness_fluents = m_fluent_calc.calc_thickness(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
     fluent_vector.insert(fluent_vector.end(), thickness_fluents.begin(), thickness_fluents.end());
 
+    // Compute wrinkle fluents
+    vector<float> wrinkle_fluents = m_fluent_calc.calc_wrinkles(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
+    fluent_vector.insert(fluent_vector.end(), wrinkle_fluents.begin(), wrinkle_fluents.end());
+
     // Compute bounding-box fluents
     vector<float> bbox3d_fluents = m_fluent_calc.calc_bbox(aligned_cloud->makeShared());
     fluent_vector.insert(fluent_vector.end(), bbox3d_fluents.begin(), bbox3d_fluents.end());
@@ -170,12 +190,16 @@ public:
     vector<float> moment_fluents = m_fluent_calc.calc_hu_moments(aligned_mask);
     fluent_vector.insert(fluent_vector.end(), moment_fluents.begin(), moment_fluents.end());
 
+    // Compute squareness fluent
+    vector<float> squareness_fluents = m_fluent_calc.calc_squareness(aligned_mask);
+    fluent_vector.insert(fluent_vector.end(), squareness_fluents.begin(), squareness_fluents.end());
+
     float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
     cout << "dist from prev fluent: " << dist << endl;
     publish_fluent_vector(fluent_vector);
     print_fluent_vector(fluent_vector);
 
-    if (false && dist > 1) {
+    if (true || dist > 1) {
       cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
       // SAVE  state_img, debug_img, fluent vector
 
@@ -250,7 +274,7 @@ private:
       step_number = m_step_number;
       m_step_number++;
     }
-    m_outfile << step_number++ << " qid:" << m_vid_idx << " ";
+    m_outfile << step_number << " qid:" << m_vid_idx << " ";
     for (int i = 0; i < fluent_vector.size(); i++) {
       m_outfile << (i+1) << ":" << fluent_vector[i];
       if (i < fluent_vector.size() - 1) m_outfile << " ";
@@ -284,6 +308,8 @@ int main(int argc, char **argv) {
   ros::Subscriber sub = node_handle.subscribe<Cloud>("/vcla/cloth_folding/vision_buffer_pcl", 1, &CloudAnalyzer::callback, &cloud_analyzer);
 
   ros::Subscriber sub2 = node_handle.subscribe("/vcla/cloth_folding/hoi_action", 1, &CloudAnalyzer::callback_hoi, &cloud_analyzer);
+
+  ros::Subscriber sub_cloth_segment = node_handle.subscribe("/vcla/cloth_folding/cloth_segment", 1, &CloudAnalyzer::callback_cloth_segment, &cloud_analyzer);
 
 
   // outfile << step_number++ << " qid:" << json["vid_idx"].GetInt() << " 1:" << cloth_feature[0] << " 2:" << cloth_feature[1] << endl;

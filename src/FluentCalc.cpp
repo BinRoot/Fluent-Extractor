@@ -4,6 +4,7 @@
 #include <pcl/common/common.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/console/parse.h>
+#include <boost/format.hpp>
 
 using namespace cv;
 using namespace std;
@@ -127,6 +128,34 @@ vector<float> FluentCalc::calc_bbox(CloudPtr cloud) {
     return fluents;
 }
 
+vector<float> FluentCalc::calc_wrinkles(CloudPtr cloud, PointT table_normal, PointT table_midpoint) {
+    double d = -table_normal.x * table_midpoint.x - table_normal.y * table_midpoint.y - table_normal.z * table_midpoint.z;
+
+    std::map<string, int> frequencies;
+    vector<string> teststring;
+    for (int i = 0; i < cloud->size(); i++) {
+        PointT p = cloud->at(i);
+        float dist = table_normal.x * p.x + table_normal.y * p.y + table_normal.z * p.z + d;
+        dist = floor( dist * 100.00 + 0.5 ) / 100.00;
+        string dist_str = std::to_string(dist);
+        frequencies[dist_str]++;
+        teststring.push_back(dist_str);
+    }
+
+    int numlen = teststring.size();
+    double infocontent = 0 ;
+    for ( std::pair<string , int> p : frequencies ) {
+        double freq = static_cast<double>( p.second ) / numlen ;
+        infocontent += freq * log2( freq ) ;
+    }
+    infocontent *= -1 ;
+//    cout << "entropy: " << infocontent << endl;
+
+    vector<float> fluents(1);
+    fluents[0] = infocontent;
+    return fluents;
+}
+
 template <typename T> int sgn(T val) {
     return (T(0) < val) - (val < T(0));
 }
@@ -148,6 +177,14 @@ vector<float> FluentCalc::calc_hu_moments(Mat mask) {
         }
     }
 
+    return fluents;
+}
+
+vector<float> FluentCalc::calc_squareness(Mat mask) {
+    vector<float> fluents(1);
+    int nonZeros = cv::countNonZero(mask);
+    int area = mask.size().area();
+    fluents[0] = ((float) nonZeros / (float) area);
     return fluents;
 }
 

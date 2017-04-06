@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include <sstream>
 #include <pcl/visualization/cloud_viewer.h>
+#include <pcl/conversions.h>
 
 #include "ros/ros.h"
 #include "ros/package.h"
@@ -17,9 +18,12 @@
 
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
+#include <std_msgs/String.h>
 
 #include <cstdio>
 #include "pcl_ros/point_cloud.h"
+
+#include <fluent_extractor/ClothSegment.h>
 
 using namespace std;
 using namespace cv;
@@ -28,10 +32,12 @@ using namespace rapidjson;
 
 class BufferManager {
 public:
-  BufferManager(int vid_idx, ros::Publisher& pub, ros::Publisher& xdisplay_pub) {
+  BufferManager(int vid_idx, ros::Publisher& pub, ros::Publisher& pub_cloth_segment, ros::Publisher& xdisplay_pub, ros::Publisher& keypoints_pub) {
     m_vid_idx = vid_idx;
     m_xdisplay_pub = xdisplay_pub;
+    m_keypoints_pub = keypoints_pub;
     m_pub = pub;
+    m_pub_cloth_segment = pub_cloth_segment;
   }
 
   void process(CloudPtr cloud_ptr, Mat img_bgr, int* pixel2voxel, int* voxel2pixel, int img_idx=-1) {
@@ -201,7 +207,7 @@ public:
 
 
       // find keypoints of cloth
-      int min_x = std::numeric_limits<float>::infinity();
+      int min_x = 99999;
       int max_x = 0;
       Point left_p2d(0, 0);
       Point right_p2d(0, 0);
@@ -222,6 +228,14 @@ public:
           }
       }
       cout << "left: " << left_p2d << ", right: " << right_p2d << endl;
+      stringstream pub_keypoints_msg;
+      pub_keypoints_msg << left_p2d.x << ","
+                        << left_p2d.y << ","
+                        << right_p2d.x << ","
+                        << right_p2d.y;
+      std_msgs::String msg_str;
+      msg_str.data = pub_keypoints_msg.str();
+      m_keypoints_pub.publish(msg_str);
 
       Mat cloth_mask_col;
       cvtColor(cloth_mask, cloth_mask_col, CV_GRAY2RGB);
@@ -229,6 +243,12 @@ public:
       circle(cloth_mask_col, left_p2d, 15, Scalar(90, 128, 220), 4);
       circle(cloth_mask_col, right_p2d, 15, Scalar(90, 128, 220), 4);
       imshow("cloth", cloth_mask_col);
+      imshow("original img", img_bgr);
+      char c = waitKey(0);
+      if (c != ' ') {
+          // only publish pcl data if spacebar
+          return;
+      }
 
       Mat xdisplay_img = CommonTools::xdisplay(cloth_mask_col);
       sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
@@ -253,7 +273,24 @@ public:
               << m_table_midpoint.z;
       cloth_cloud_ptr->header.frame_id = payload.str();
 
+      cout << "publishing cloud of size " << cloth_cloud_ptr->size() << endl;
       m_pub.publish(cloth_cloud_ptr);
+
+
+      fluent_extractor::ClothSegment cloth_segment;
+      cloth_segment.vid_idx = m_vid_idx;
+      cloth_segment.img_idx = img_idx;
+      cloth_segment.table_normal = {m_table_normal.x, m_table_normal.y, m_table_normal.z};
+      cloth_segment.table_midpoint = {m_table_midpoint.x, m_table_midpoint.y, m_table_midpoint.z};
+      cloth_segment.mask = *cv_bridge::CvImage(std_msgs::Header(), "mono8", cloth_mask).toImageMsg();
+      cloth_segment.img = *cv_bridge::CvImage(std_msgs::Header(), "bgr8", img_bgr).toImageMsg();
+      sensor_msgs::PointCloud2 cloud;
+      cloud_ptr->width = 0;
+      cloud_ptr->height = 0;
+      pcl::toROSMsg(*cloud_ptr, cloud);
+      cloth_segment.cloud = cloud;
+      m_pub_cloth_segment.publish(cloth_segment);
+
 
 //      stringstream pcl_filename;
 //      pcl_filename << img_idx << ".pcd";
@@ -265,7 +302,6 @@ public:
     }
 
     waitKey(20);
-   
   }
 
   void kinect_callback(const CloudConstPtr& cloud_ptr) {
@@ -280,7 +316,9 @@ public:
   }
 private:
   ros::Publisher m_pub;
+  ros::Publisher m_pub_cloth_segment;
   ros::Publisher m_xdisplay_pub;
+  ros::Publisher m_keypoints_pub;
   int m_vid_idx;
   Mat m_table_mask;
   PointT m_table_midpoint, m_table_normal;
@@ -304,14 +342,17 @@ int main(int argc, char **argv) {
 
   ros::Publisher pub = node_handle.advertise<Cloud>("/vcla/cloth_folding/vision_buffer_pcl", 1);
   ros::Publisher xdisplay_pub = node_handle.advertise<sensor_msgs::Image>("/vcla/cloth_folding/vision_buffer", 1);
+  ros::Publisher cloth_keypoints_pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/keypoints", 1);
+  ros::Publisher pub_cloth_segment = node_handle.advertise<fluent_extractor::ClothSegment>("/vcla/cloth_folding/cloth_segment", 1);
+
 
   if (json["use_kinect"].GetBool()) {
-    BufferManager buffer_manager(json["vid_idx"].GetInt(), pub, xdisplay_pub);
+    BufferManager buffer_manager(json["vid_idx"].GetInt(), pub, pub_cloth_segment, xdisplay_pub, cloth_keypoints_pub);
     std::string kinect_topic = node_handle.resolveName(json["kinect_topic"].GetString());
     ros::Subscriber sub = node_handle.subscribe(kinect_topic, 1, &BufferManager::kinect_callback, &buffer_manager);
     ros::spin();
   } else if (json["use_recording"].GetBool()) {
-    BufferManager buffer_manager(0, pub, xdisplay_pub);
+    BufferManager buffer_manager(json["vid_idx"].GetInt(), pub, pub_cloth_segment, xdisplay_pub, cloth_keypoints_pub);
 
     string record_dir = ros::package::getPath("fluent_extractor") + "/" + json["record_dir"].GetString() + "/";
     FileFrameScanner scanner(record_dir);
@@ -331,7 +372,7 @@ int main(int argc, char **argv) {
     }
   } else {
     for (int vid_idx = json["vid_idx_start"].GetInt(); vid_idx <= json["vid_idx_end"].GetInt(); vid_idx++) {
-      BufferManager buffer_manager(vid_idx, pub, xdisplay_pub);
+      BufferManager buffer_manager(vid_idx, pub, pub_cloth_segment, xdisplay_pub, cloth_keypoints_pub);
 
       // Define the video directory
       stringstream vids_directory;

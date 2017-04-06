@@ -1209,6 +1209,106 @@ public:
         return false;
     }
 
+    static bool find_biggest_plane_sparse(CloudPtr cloud_ptr,
+                                   int* voxel2pixel,
+                                   cv::Size size,
+                                   cv::Mat& mask,
+                                   PointT& midpoint,
+                                   PointT& normal) {
+        std::cout << "Finding biggest plane in the pointcloud..." << std::endl;
+
+        CloudPtr remaining_cloud_ptr = CloudPtr(new Cloud);
+        std::vector<int> index;
+
+        std::cout << "original size: " << cloud_ptr->size() << std::endl;
+
+        for (int i = 0; i < cloud_ptr->size(); i++) {
+            PointT p = cloud_ptr->at(i);
+            if (p.z > 0 && p.z < 100) {
+                remaining_cloud_ptr->push_back(PointT(p));
+            }
+        }
+
+        std::cout << "new size: " << remaining_cloud_ptr->size() << std::endl;
+
+
+        pcl::search::Search<PointT>::Ptr tree =
+                boost::shared_ptr<pcl::search::Search<PointT> >(new pcl::search::KdTree<PointT>);
+        pcl::PointCloud <pcl::Normal>::Ptr normals(new pcl::PointCloud <pcl::Normal>);
+        pcl::NormalEstimation<PointT, pcl::Normal> normal_estimator;
+        normal_estimator.setSearchMethod(tree);
+        normal_estimator.setInputCloud(remaining_cloud_ptr->makeShared());
+        normal_estimator.setKSearch(50);
+        normal_estimator.compute(*normals);
+
+        pcl::IndicesPtr indices(new std::vector <int>);
+        pcl::PassThrough<PointT> pass;
+        pass.setInputCloud(remaining_cloud_ptr->makeShared());
+        pass.setFilterFieldName("z");
+        pass.setFilterLimits(0.0, 1.0);
+        pass.filter(*indices);
+
+        pcl::RegionGrowing<PointT, pcl::Normal> reg;
+        reg.setMinClusterSize(50);
+        reg.setMaxClusterSize(1000000);
+        reg.setSearchMethod(tree);
+        reg.setNumberOfNeighbours(30);
+        reg.setInputCloud(remaining_cloud_ptr->makeShared());
+        //reg.setIndices (indices);
+        reg.setInputNormals (normals);
+        reg.setSmoothnessThreshold(3.0 / 180.0 * M_PI);
+        reg.setCurvatureThreshold(1.0);
+
+        std::vector <pcl::PointIndices> clusters;
+        reg.extract (clusters);
+
+
+        int max_cluster_size = 0;
+        if (clusters.size() > 0) {
+            int max_cluster_idx = -1;
+            for (int cluster_idx = 0; cluster_idx < clusters.size(); cluster_idx++) {
+                // calculate average normal of each cluster, and make sure y is dominant
+                PointT cluster_normal = CommonTools::estimate_normal(clusters[cluster_idx].indices, normals, 20);
+                double y_ratio = fabs(cluster_normal.y) / (fabs(cluster_normal.x) + fabs(cluster_normal.y) + fabs(cluster_normal.z));
+                if (clusters[cluster_idx].indices.size() > max_cluster_size && y_ratio > 0.3) {
+                    max_cluster_size = clusters[cluster_idx].indices.size();
+                    max_cluster_idx = cluster_idx;
+                    normal = cluster_normal;
+                }
+            }
+            if (max_cluster_idx < 0) {
+                std::cout << "No table found" << std::endl;
+                return false;
+            } else {
+                std::vector<cv::Point2i> plane_points;
+                midpoint.x = 0; midpoint.y = 0; midpoint.z = 0;
+                for (int i = 0; i < clusters[max_cluster_idx].indices.size(); i++) {
+                    int row, col;
+                    vox2pix(voxel2pixel, clusters[max_cluster_idx].indices[i], row, col, remaining_cloud_ptr->width);
+                    plane_points.push_back(cv::Point2i(col, row));
+                    PointT p = remaining_cloud_ptr->at(clusters[max_cluster_idx].indices[i]);
+                    midpoint.x += p.x;
+                    midpoint.y += p.y;
+                    midpoint.z += p.z;
+//                    PointT p = cloud_ptr->at(clusters[max_cluster_idx].indices[i]);
+//                    plane_cloud->push_back(p);
+                }
+                midpoint.x /= plane_points.size();
+                midpoint.y /= plane_points.size();
+                midpoint.z /= plane_points.size();
+                std::vector<cv::Point2i> hull;
+                cv::convexHull(plane_points, hull, true);
+                std::vector<std::vector<cv::Point2i>> hulls;
+                hulls.push_back(hull);
+                mask = cv::Mat::zeros(size, CV_8U);
+                cv::drawContours(mask, hulls, 0, cv::Scalar(255, 255, 255), -1);
+                return true;
+            }
+        }
+        std::cout << "No planes found" << std::endl;
+        return false;
+    }
+
     static PointT get_3d_approx(cv::Point p, cv::Size size, int* pixel2voxel, CloudPtr cloud_ptr) {
       int n = 5;  // neighborhood
       int start_col = cv::max(p.x - n, 0);

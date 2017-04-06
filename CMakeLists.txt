@@ -8,15 +8,14 @@ find_package(catkin REQUIRED COMPONENTS
   genmsg
   cv_bridge
   pcl_ros
+  message_generation
 )
 
 find_package(OpenCV REQUIRED)
 find_package(Boost COMPONENTS filesystem system)
 find_package(PCL 1.7 REQUIRED)
 
-generate_messages(DEPENDENCIES std_msgs)
 
-catkin_package()
 
 include_directories(include ${catkin_INCLUDE_DIRS})
 
@@ -29,6 +28,19 @@ link_directories(${PCL_LIBRARY_DIRS})
 
 add_definitions(${PCL_DEFINITIONS})
 set(CMAKE_CXX_FLAGS "-std=c++11 -O1")
+
+
+add_message_files(
+        FILES
+        ClothSegment.msg
+)
+
+generate_messages(DEPENDENCIES std_msgs sensor_msgs)
+
+catkin_package(
+        CATKIN_DEPENDS message_runtime
+)
+
 
 ### Vision Buffer
 set(SOURCE_FILES ${SOURCE_FILES} src/Seg2D.cpp src/Seg2D.h)

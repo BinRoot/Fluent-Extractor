@@ -1,12 +1,12 @@
 {
-    "vids_directory": "/home/robot/res/cloth_folding_vids/",
+    "vids_directory": "/home/binroot/res/cloth_folding_vids/",
     "vid_idx": 1,
-    "vid_idx_start": 42,
+    "vid_idx_start": 20,
     "vid_idx_end": 45,
     "start_frame_idx": 0,
-    "use_kinect": true,
+    "use_kinect": false,
     "kinect_topic": "/kinect2/sd/points",
-    "record_dir": "recording_1",
+    "record_dir": "recordings/recording_yellow-shirt_10",
     "use_recording": false,
     "loop_mode": false,
     "fluents_directory": "fluents"
