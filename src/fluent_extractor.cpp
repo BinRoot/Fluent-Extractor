@@ -47,9 +47,170 @@ public:
     sensor_msgs::Image ros_img = cloth_segment.img;
     Mat mask = cv_bridge::toCvCopy(ros_mask, "mono8")->image;
     Mat img = cv_bridge::toCvCopy(ros_img, "bgr8")->image;
+
+      cout << "pixel2voxel" << endl;
+
+    int* pixel2voxel = cloth_segment.pixel2voxel.data();
     imshow("fluent_extractor mask", mask);
     imshow("fluent_extractor img", img);
     waitKey(20);
+    CloudPtr cloud_ptr = CloudPtr(new Cloud(cloud));
+    CloudPtr cloth_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr, pixel2voxel, mask);
+
+    PointT table_normal;
+    table_normal.x = cloth_segment.table_normal[0];
+    table_normal.y = cloth_segment.table_normal[1];
+    table_normal.z = cloth_segment.table_normal[2];
+    PointT table_midpoint;
+    table_midpoint.x = cloth_segment.table_midpoint[0];
+    table_midpoint.y = cloth_segment.table_midpoint[1];
+    table_midpoint.z = cloth_segment.table_midpoint[2];
+
+    int vid_idx = cloth_segment.vid_idx;
+    int img_idx = cloth_segment.img_idx;
+
+    compute_fluents(cloth_cloud_ptr, table_normal, table_midpoint, vid_idx, img_idx);
+  }
+
+  void compute_fluents(CloudConstPtr cloth_cloud, PointT table_normal, PointT table_midpoint, int vid_idx, int img_idx) {
+      std::vector<float> fluent_vector;
+
+      if (m_vid_idx != vid_idx) {
+          m_step_number = 1;
+      }
+      m_vid_idx = vid_idx;
+
+      Eigen::Matrix4f transform = CommonTools::get_projection_transform(cloth_cloud->makeShared());
+      CloudPtr aligned_cloud = CommonTools::transform3d(cloth_cloud->makeShared(), transform);
+
+      float x_min, y_min, z_min;
+      float scale_x, scale_y, scale_z;
+      Mat debug_img;
+      Rect outer_bbox;
+//    vector<float> bbox_fluents = m_fluent_calc.calc_inner_outer_bbox(aligned_cloud->makeShared(), debug_img,
+//                                                                     x_min, y_min, z_min, scale_x, scale_y, scale_z, outer_bbox);
+//    fluent_vector.insert(fluent_vector.end(), bbox_fluents.begin(), bbox_fluents.end());
+
+      if (m_compute_fold) {
+          m_grip.x = m_grip.x * outer_bbox.height;
+          m_grip.y = m_grip.y * outer_bbox.height;
+          m_release.x = m_release.x * outer_bbox.height;
+          m_release.y = m_release.y * outer_bbox.height;
+
+          cout << "\t\t" << "GRIP" << m_grip << " --> RELEASE " << m_release << endl;
+
+          // draw these grip/release circle on debug_img
+          int debug_grip_col = m_grip.x + outer_bbox.x;
+          int debug_grip_row = m_grip.y + outer_bbox.y;
+          int debug_release_col = m_release.x + outer_bbox.x;
+          int debug_release_row = m_release.y + outer_bbox.y;
+          Mat debug_img_col;
+          cvtColor(debug_img, debug_img_col, CV_GRAY2BGR);
+          circle(debug_img_col, cv::Point(debug_grip_col, debug_grip_row), 10, cv::Scalar(0, 0, 255), -1);
+          circle(debug_img_col, cv::Point(debug_release_col, debug_release_row), 10, cv::Scalar(255, 0, 0), -1);
+          imshow("debug points", debug_img_col);
+          waitKey(40);
+
+          float x3d_grip = (m_grip.x * scale_y) / debug_img.cols + y_min;
+          float y3d_grip = (m_grip.y * scale_z) / debug_img.rows + z_min;
+          float x3d_release = (m_release.x * scale_y) / debug_img.cols + y_min;
+          float y3d_release = (m_release.y * scale_z) / debug_img.rows + z_min;
+
+          Point2f target_release_point(x3d_release, y3d_release);
+          Point2f target_grip_point(x3d_grip, y3d_grip);
+          float min_dist_release = std::numeric_limits<float>::infinity();
+          float min_dist_grip = std::numeric_limits<float>::infinity();
+          PointT closest_3d_release;
+          PointT closest_3d_grip;
+          for (int i = 0; i < aligned_cloud->size(); i++) {
+              PointT p3d = aligned_cloud->at(i);
+              Point2f p3d_proj(p3d.x, p3d.y);
+              float dist_release = cv::norm(p3d_proj - target_release_point);
+              float dist_grip = cv::norm(p3d_proj - target_grip_point);
+              if (dist_release < min_dist_release) {
+                  min_dist_release = dist_release;
+                  closest_3d_release.x = p3d.x;
+                  closest_3d_release.y = p3d.y;
+                  closest_3d_release.z = p3d.z;
+              }
+              if (dist_grip < min_dist_grip) {
+                  min_dist_grip = dist_grip;
+                  closest_3d_grip.x = p3d.x;
+                  closest_3d_grip.y = p3d.y;
+                  closest_3d_grip.z = p3d.z;
+              }
+          }
+
+          cout << "FOUND 3D point in projected cloud: " << closest_3d_grip << " --> " << closest_3d_release << endl;
+          CloudPtr release_cloud(new pcl::PointCloud<PointT>());
+          release_cloud->push_back(closest_3d_release);
+          CloudPtr release_cloud_orig = CommonTools::transform3d(release_cloud, transform.inverse());
+          PointT true_release = release_cloud_orig->at(0);
+
+          CloudPtr grip_cloud(new pcl::PointCloud<PointT>());
+          grip_cloud->push_back(closest_3d_grip);
+          CloudPtr grip_cloud_orig = CommonTools::transform3d(grip_cloud, transform.inverse());
+          PointT true_grip = grip_cloud_orig->at(0);
+
+          cout << "FOUND 3D point in original cloud: " << true_grip << " --> " << true_release << endl;
+          stringstream pub_ui_msg;
+          pub_ui_msg << true_grip.x << ","
+                     << true_grip.y << ","
+                     << true_grip.z << ","
+                     << true_release.x << ","
+                     << true_release.y << ","
+                     << true_release.z << endl;
+          std_msgs::String msg;
+          msg.data = pub_ui_msg.str();
+          m_pub_ui.publish(msg);
+
+          m_compute_fold = false;
+      }
+
+      Mat aligned_mask = m_fluent_calc.get_mask_from_aligned_cloud(aligned_cloud->makeShared());
+
+      // Compute thickness fluents
+      vector<float> thickness_fluents = m_fluent_calc.calc_thickness(cloth_cloud->makeShared(), table_normal, table_midpoint);
+      fluent_vector.insert(fluent_vector.end(), thickness_fluents.begin(), thickness_fluents.end());
+
+      // Compute wrinkle fluents
+      vector<float> wrinkle_fluents = m_fluent_calc.calc_wrinkles(cloth_cloud->makeShared(), table_normal, table_midpoint);
+      fluent_vector.insert(fluent_vector.end(), wrinkle_fluents.begin(), wrinkle_fluents.end());
+
+      // Compute bounding-box fluents
+      vector<float> bbox3d_fluents = m_fluent_calc.calc_bbox(aligned_cloud->makeShared());
+      fluent_vector.insert(fluent_vector.end(), bbox3d_fluents.begin(), bbox3d_fluents.end());
+
+      // Compute symmetry fluents
+      vector<float> symmetry_fluents = m_fluent_calc.calc_principal_symmetries(aligned_cloud->makeShared());
+      fluent_vector.insert(fluent_vector.end(), symmetry_fluents.begin(), symmetry_fluents.end());
+
+      // Compute moment flunets
+      vector<float> moment_fluents = m_fluent_calc.calc_hu_moments(aligned_mask);
+      fluent_vector.insert(fluent_vector.end(), moment_fluents.begin(), moment_fluents.end());
+
+      // Compute squareness fluent
+      vector<float> squareness_fluents = m_fluent_calc.calc_squareness(aligned_mask);
+      fluent_vector.insert(fluent_vector.end(), squareness_fluents.begin(), squareness_fluents.end());
+
+      float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
+      cout << "dist from prev fluent: " << dist << endl;
+      publish_fluent_vector(fluent_vector);
+      print_fluent_vector(fluent_vector);
+
+      if (true || dist > 1) {
+          cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
+          // SAVE  state_img, debug_img, fluent vector
+
+//      Mat state_img = CommonTools::get_image_from_cloud(aligned_cloud, "yz");
+//      save_fluent_data(state_img, debug_img, fluent_vector);
+
+          save_fluent_vector(fluent_vector, img_idx);
+          print_fluent_vector(fluent_vector);
+
+          m_prev_fluent_vector = fluent_vector;
+      }
+      m_pcd_filename_idx++;
   }
 
   void callback(const CloudConstPtr& cloud_const_ptr) {
@@ -58,8 +219,6 @@ public:
     if (cloud_const_ptr->size() < 100) {
       return;
     }
-    
-    std::vector<float> fluent_vector;
 
     // Get the table normal and vid_idx, which is saved in the header
     string payload = cloud_const_ptr->header.frame_id;
@@ -67,8 +226,8 @@ public:
     float table_normal_x, table_normal_y, table_normal_z;
     float table_midpoint_x, table_midpoint_y, table_midpoint_z;
     sscanf(payload.c_str(), "%d %d %f %f %f %f %f %f", &vid_idx, &img_idx,
-           &table_normal_x, &table_normal_y, &table_normal_z,
-           &table_midpoint_x, &table_midpoint_y, &table_midpoint_z);
+         &table_normal_x, &table_normal_y, &table_normal_z,
+         &table_midpoint_x, &table_midpoint_y, &table_midpoint_z);
     PointT table_normal, table_midpoint;
     table_normal.x = table_normal_x;
     table_normal.y = table_normal_y;
@@ -76,142 +235,8 @@ public:
     table_midpoint.x = table_midpoint_x;
     table_midpoint.y = table_midpoint_y;
     table_midpoint.z = table_midpoint_z;
-    if (m_vid_idx != vid_idx) {
-      m_step_number = 1;
-    }
-    m_vid_idx = vid_idx;
 
-    Eigen::Matrix4f transform = CommonTools::get_projection_transform(cloud_const_ptr->makeShared());
-    CloudPtr aligned_cloud = CommonTools::transform3d(cloud_const_ptr->makeShared(), transform);
-
-    float x_min, y_min, z_min;
-    float scale_x, scale_y, scale_z;
-    Mat debug_img;
-    Rect outer_bbox;
-//    vector<float> bbox_fluents = m_fluent_calc.calc_inner_outer_bbox(aligned_cloud->makeShared(), debug_img,
-//                                                                     x_min, y_min, z_min, scale_x, scale_y, scale_z, outer_bbox);
-//    fluent_vector.insert(fluent_vector.end(), bbox_fluents.begin(), bbox_fluents.end());
-
-    if (m_compute_fold) {
-      m_grip.x = m_grip.x * outer_bbox.height;
-      m_grip.y = m_grip.y * outer_bbox.height;
-      m_release.x = m_release.x * outer_bbox.height;
-      m_release.y = m_release.y * outer_bbox.height;
-
-      cout << "\t\t" << "GRIP" << m_grip << " --> RELEASE " << m_release << endl;
-
-      // draw these grip/release circle on debug_img
-      int debug_grip_col = m_grip.x + outer_bbox.x;
-      int debug_grip_row = m_grip.y + outer_bbox.y;
-      int debug_release_col = m_release.x + outer_bbox.x;
-      int debug_release_row = m_release.y + outer_bbox.y;
-      Mat debug_img_col;
-      cvtColor(debug_img, debug_img_col, CV_GRAY2BGR);
-      circle(debug_img_col, cv::Point(debug_grip_col, debug_grip_row), 10, cv::Scalar(0, 0, 255), -1);
-      circle(debug_img_col, cv::Point(debug_release_col, debug_release_row), 10, cv::Scalar(255, 0, 0), -1);
-      imshow("debug points", debug_img_col);
-      waitKey(40);
-
-      float x3d_grip = (m_grip.x * scale_y) / debug_img.cols + y_min;
-      float y3d_grip = (m_grip.y * scale_z) / debug_img.rows + z_min;
-      float x3d_release = (m_release.x * scale_y) / debug_img.cols + y_min;
-      float y3d_release = (m_release.y * scale_z) / debug_img.rows + z_min;
-
-      Point2f target_release_point(x3d_release, y3d_release);
-      Point2f target_grip_point(x3d_grip, y3d_grip);
-      float min_dist_release = std::numeric_limits<float>::infinity();
-      float min_dist_grip = std::numeric_limits<float>::infinity();
-      PointT closest_3d_release;
-      PointT closest_3d_grip;
-      for (int i = 0; i < aligned_cloud->size(); i++) {
-        PointT p3d = aligned_cloud->at(i);
-        Point2f p3d_proj(p3d.x, p3d.y);
-        float dist_release = cv::norm(p3d_proj - target_release_point);
-        float dist_grip = cv::norm(p3d_proj - target_grip_point);
-        if (dist_release < min_dist_release) {
-          min_dist_release = dist_release;
-          closest_3d_release.x = p3d.x;
-          closest_3d_release.y = p3d.y;
-          closest_3d_release.z = p3d.z;
-        }
-        if (dist_grip < min_dist_grip) {
-          min_dist_grip = dist_grip;
-          closest_3d_grip.x = p3d.x;
-          closest_3d_grip.y = p3d.y;
-          closest_3d_grip.z = p3d.z;
-        }
-      }
-
-      cout << "FOUND 3D point in projected cloud: " << closest_3d_grip << " --> " << closest_3d_release << endl;
-      CloudPtr release_cloud(new pcl::PointCloud<PointT>());
-      release_cloud->push_back(closest_3d_release);
-      CloudPtr release_cloud_orig = CommonTools::transform3d(release_cloud, transform.inverse());
-      PointT true_release = release_cloud_orig->at(0);
-
-      CloudPtr grip_cloud(new pcl::PointCloud<PointT>());
-      grip_cloud->push_back(closest_3d_grip);
-      CloudPtr grip_cloud_orig = CommonTools::transform3d(grip_cloud, transform.inverse());
-      PointT true_grip = grip_cloud_orig->at(0);
-
-      cout << "FOUND 3D point in original cloud: " << true_grip << " --> " << true_release << endl;
-      stringstream pub_ui_msg;
-      pub_ui_msg << true_grip.x << ","
-                 << true_grip.y << ","
-                 << true_grip.z << ","
-                 << true_release.x << ","
-                 << true_release.y << ","
-                 << true_release.z << endl;
-      std_msgs::String msg;
-      msg.data = pub_ui_msg.str();
-      m_pub_ui.publish(msg);
-
-      m_compute_fold = false;
-    }
-
-    Mat aligned_mask = m_fluent_calc.get_mask_from_aligned_cloud(aligned_cloud->makeShared());
-
-    // Compute thickness fluents
-    vector<float> thickness_fluents = m_fluent_calc.calc_thickness(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
-    fluent_vector.insert(fluent_vector.end(), thickness_fluents.begin(), thickness_fluents.end());
-
-    // Compute wrinkle fluents
-    vector<float> wrinkle_fluents = m_fluent_calc.calc_wrinkles(cloud_const_ptr->makeShared(), table_normal, table_midpoint);
-    fluent_vector.insert(fluent_vector.end(), wrinkle_fluents.begin(), wrinkle_fluents.end());
-
-    // Compute bounding-box fluents
-    vector<float> bbox3d_fluents = m_fluent_calc.calc_bbox(aligned_cloud->makeShared());
-    fluent_vector.insert(fluent_vector.end(), bbox3d_fluents.begin(), bbox3d_fluents.end());
-
-    // Compute symmetry fluents
-    vector<float> symmetry_fluents = m_fluent_calc.calc_principal_symmetries(aligned_cloud->makeShared());
-    fluent_vector.insert(fluent_vector.end(), symmetry_fluents.begin(), symmetry_fluents.end());
-
-    // Compute moment flunets
-    vector<float> moment_fluents = m_fluent_calc.calc_hu_moments(aligned_mask);
-    fluent_vector.insert(fluent_vector.end(), moment_fluents.begin(), moment_fluents.end());
-
-    // Compute squareness fluent
-    vector<float> squareness_fluents = m_fluent_calc.calc_squareness(aligned_mask);
-    fluent_vector.insert(fluent_vector.end(), squareness_fluents.begin(), squareness_fluents.end());
-
-    float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
-    cout << "dist from prev fluent: " << dist << endl;
-    publish_fluent_vector(fluent_vector);
-    print_fluent_vector(fluent_vector);
-
-    if (true || dist > 1) {
-      cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
-      // SAVE  state_img, debug_img, fluent vector
-
-//      Mat state_img = CommonTools::get_image_from_cloud(aligned_cloud, "yz");
-//      save_fluent_data(state_img, debug_img, fluent_vector);
-
-      save_fluent_vector(fluent_vector, img_idx);
-      print_fluent_vector(fluent_vector);
-
-      m_prev_fluent_vector = fluent_vector;
-    }
-    m_pcd_filename_idx++;
+    compute_fluents(cloud_const_ptr, table_normal, table_midpoint, vid_idx, img_idx);
   }
 
 private:

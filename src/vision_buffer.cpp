@@ -256,25 +256,25 @@ public:
 
 
       // save cloth_mask to file
-      String path = ros::package::getPath("fluent_extractor") + "/cloth.png";
-      imwrite(path, cloth_mask);
+//      String path = ros::package::getPath("fluent_extractor") + "/cloth.png";
+//      imwrite(path, cloth_mask);
 
-      CloudPtr cloth_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr, pixel2voxel, cloth_mask);
+//      CloudPtr cloth_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr, pixel2voxel, cloth_mask);
+//
+//      stringstream payload;
+//
+//      payload << m_vid_idx << " "
+//              << img_idx << " "
+//              << m_table_normal.x << " "
+//              << m_table_normal.y << " "
+//              << m_table_normal.z << " "
+//              << m_table_midpoint.x << " "
+//              << m_table_midpoint.y << " "
+//              << m_table_midpoint.z;
+//      cloth_cloud_ptr->header.frame_id = payload.str();
 
-      stringstream payload;
-
-      payload << m_vid_idx << " "
-              << img_idx << " "
-              << m_table_normal.x << " "
-              << m_table_normal.y << " "
-              << m_table_normal.z << " "
-              << m_table_midpoint.x << " "
-              << m_table_midpoint.y << " "
-              << m_table_midpoint.z;
-      cloth_cloud_ptr->header.frame_id = payload.str();
-
-      cout << "publishing cloud of size " << cloth_cloud_ptr->size() << endl;
-      m_pub.publish(cloth_cloud_ptr);
+//      cout << "publishing cloud of size " << cloth_cloud_ptr->size() << endl;
+//      m_pub.publish(cloth_cloud_ptr);
 
 
       fluent_extractor::ClothSegment cloth_segment;
@@ -289,6 +289,7 @@ public:
       cloud_ptr->height = 0;
       pcl::toROSMsg(*cloud_ptr, cloud);
       cloth_segment.cloud = cloud;
+      cloth_segment.pixel2voxel = std::vector<int>(pixel2voxel, pixel2voxel + img_bgr.size().area());
       m_pub_cloth_segment.publish(cloth_segment);
 
 
