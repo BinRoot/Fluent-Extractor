@@ -48,8 +48,6 @@ public:
     Mat mask = cv_bridge::toCvCopy(ros_mask, "mono8")->image;
     Mat img = cv_bridge::toCvCopy(ros_img, "bgr8")->image;
 
-      cout << "pixel2voxel" << endl;
-
     int* pixel2voxel = cloth_segment.pixel2voxel.data();
     imshow("fluent_extractor mask", mask);
     imshow("fluent_extractor img", img);
@@ -70,6 +68,44 @@ public:
     int img_idx = cloth_segment.img_idx;
 
     compute_fluents(cloth_cloud_ptr, table_normal, table_midpoint, vid_idx, img_idx);
+
+    if (m_prev_mask.size().area() > 0) {
+        // compare mask with m_prev_mask
+        Mat debug_mask_img = Mat::zeros(mask.size(), CV_8UC3);
+//        debug_mask_img = CommonTools::draw_mask(debug_mask_img, m_prev_mask, Scalar(0, 255, 0));
+        debug_mask_img = CommonTools::draw_mask(debug_mask_img, mask, Scalar(255, 0, 0));
+        Mat child_moved_mask = m_prev_mask - mask;
+        vector<cv::Point> pts;
+        CommonTools::max_contour(child_moved_mask, pts, child_moved_mask);
+        CommonTools::erode_dilate(child_moved_mask, 2);
+        debug_mask_img = CommonTools::draw_mask(debug_mask_img, child_moved_mask, Scalar(0, 0, 255));
+        imshow("debug_mask_img", debug_mask_img);
+        waitKey(20);
+
+        // [cloth_cloud_ptr] pcl of current cloth
+        // pcl of moved prev cloth-part (from prev_mask - mask)
+        // pcl of stationary prev cloth-part (from mask)
+        CloudPtr cloth_moved_cloud = CommonTools::get_pointcloud_from_mask(m_prev_cloud_ptr, m_prev_pixel2voxel, child_moved_mask);
+        Mat child_remained_mask = m_prev_mask - child_moved_mask;
+        CommonTools::erode_dilate(child_remained_mask, 2);
+        CloudPtr cloth_remained_cloud = CommonTools::get_pointcloud_from_mask(m_prev_cloud_ptr, m_prev_pixel2voxel, child_remained_mask);
+        cout << "child cloud (moved) size: " << cloth_moved_cloud->size() << endl;
+        cout << "child cloud (remained) size: " << cloth_remained_cloud->size() << endl;
+        cout << "total current cloth cloud size: " << cloth_cloud_ptr->size() << endl;
+
+        stringstream pcd_moved_filename;
+        pcd_moved_filename << "cloth_moved_" << vid_idx << "_" << img_idx << ".pcd";
+        pcl::io::savePCDFile(pcd_moved_filename.str(), *cloth_moved_cloud);
+        stringstream pcd_remained_filename;
+        pcd_remained_filename << "cloth_remained_" << vid_idx << "_" << img_idx << ".pcd";
+        pcl::io::savePCDFile(pcd_remained_filename.str(), *cloth_remained_cloud);
+    }
+
+    m_prev_mask = mask.clone();
+    m_prev_cloud_ptr = CloudPtr(cloud_ptr);
+    delete m_prev_pixel2voxel;
+    m_prev_pixel2voxel = new int[img.size().area()];
+    std::memcpy(m_prev_pixel2voxel, pixel2voxel, sizeof(int) * img.size().area());
   }
 
   void compute_fluents(CloudConstPtr cloth_cloud, PointT table_normal, PointT table_midpoint, int vid_idx, int img_idx) {
@@ -252,6 +288,9 @@ private:
   cv::Point2f m_grip;
   cv::Point2f m_release;
   bool m_compute_fold;
+  Mat m_prev_mask;
+  CloudPtr m_prev_cloud_ptr;
+  int* m_prev_pixel2voxel;
   
   void print_fluent_vector(std::vector<float> fluent_vector) {
     for (int i = 0; i < fluent_vector.size(); i++) {
