@@ -67,7 +67,13 @@ public:
     int vid_idx = cloth_segment.vid_idx;
     int img_idx = cloth_segment.img_idx;
 
-    compute_fluents(cloth_cloud_ptr, table_normal, table_midpoint, vid_idx, img_idx);
+    // if video_idx changed, then restart the step_number counter
+    if (m_vid_idx != vid_idx) {
+      m_step_number = 1;
+    }
+    m_vid_idx = vid_idx;
+
+    vector<float> fluent_vec = compute_fluents(cloth_cloud_ptr, table_normal, table_midpoint, img_idx);
 
     if (m_prev_mask.size().area() > 0) {
         // compare mask with m_prev_mask
@@ -108,13 +114,8 @@ public:
     std::memcpy(m_prev_pixel2voxel, pixel2voxel, sizeof(int) * img.size().area());
   }
 
-  void compute_fluents(CloudConstPtr cloth_cloud, PointT table_normal, PointT table_midpoint, int vid_idx, int img_idx) {
+  vector<float> compute_fluents(CloudConstPtr cloth_cloud, PointT table_normal, PointT table_midpoint, int img_idx) {
       std::vector<float> fluent_vector;
-
-      if (m_vid_idx != vid_idx) {
-          m_step_number = 1;
-      }
-      m_vid_idx = vid_idx;
 
       Eigen::Matrix4f transform = CommonTools::get_projection_transform(cloth_cloud->makeShared());
       CloudPtr aligned_cloud = CommonTools::transform3d(cloth_cloud->makeShared(), transform);
@@ -126,82 +127,6 @@ public:
 //    vector<float> bbox_fluents = m_fluent_calc.calc_inner_outer_bbox(aligned_cloud->makeShared(), debug_img,
 //                                                                     x_min, y_min, z_min, scale_x, scale_y, scale_z, outer_bbox);
 //    fluent_vector.insert(fluent_vector.end(), bbox_fluents.begin(), bbox_fluents.end());
-
-      if (m_compute_fold) {
-          m_grip.x = m_grip.x * outer_bbox.height;
-          m_grip.y = m_grip.y * outer_bbox.height;
-          m_release.x = m_release.x * outer_bbox.height;
-          m_release.y = m_release.y * outer_bbox.height;
-
-          cout << "\t\t" << "GRIP" << m_grip << " --> RELEASE " << m_release << endl;
-
-          // draw these grip/release circle on debug_img
-          int debug_grip_col = m_grip.x + outer_bbox.x;
-          int debug_grip_row = m_grip.y + outer_bbox.y;
-          int debug_release_col = m_release.x + outer_bbox.x;
-          int debug_release_row = m_release.y + outer_bbox.y;
-          Mat debug_img_col;
-          cvtColor(debug_img, debug_img_col, CV_GRAY2BGR);
-          circle(debug_img_col, cv::Point(debug_grip_col, debug_grip_row), 10, cv::Scalar(0, 0, 255), -1);
-          circle(debug_img_col, cv::Point(debug_release_col, debug_release_row), 10, cv::Scalar(255, 0, 0), -1);
-          imshow("debug points", debug_img_col);
-          waitKey(40);
-
-          float x3d_grip = (m_grip.x * scale_y) / debug_img.cols + y_min;
-          float y3d_grip = (m_grip.y * scale_z) / debug_img.rows + z_min;
-          float x3d_release = (m_release.x * scale_y) / debug_img.cols + y_min;
-          float y3d_release = (m_release.y * scale_z) / debug_img.rows + z_min;
-
-          Point2f target_release_point(x3d_release, y3d_release);
-          Point2f target_grip_point(x3d_grip, y3d_grip);
-          float min_dist_release = std::numeric_limits<float>::infinity();
-          float min_dist_grip = std::numeric_limits<float>::infinity();
-          PointT closest_3d_release;
-          PointT closest_3d_grip;
-          for (int i = 0; i < aligned_cloud->size(); i++) {
-              PointT p3d = aligned_cloud->at(i);
-              Point2f p3d_proj(p3d.x, p3d.y);
-              float dist_release = cv::norm(p3d_proj - target_release_point);
-              float dist_grip = cv::norm(p3d_proj - target_grip_point);
-              if (dist_release < min_dist_release) {
-                  min_dist_release = dist_release;
-                  closest_3d_release.x = p3d.x;
-                  closest_3d_release.y = p3d.y;
-                  closest_3d_release.z = p3d.z;
-              }
-              if (dist_grip < min_dist_grip) {
-                  min_dist_grip = dist_grip;
-                  closest_3d_grip.x = p3d.x;
-                  closest_3d_grip.y = p3d.y;
-                  closest_3d_grip.z = p3d.z;
-              }
-          }
-
-          cout << "FOUND 3D point in projected cloud: " << closest_3d_grip << " --> " << closest_3d_release << endl;
-          CloudPtr release_cloud(new pcl::PointCloud<PointT>());
-          release_cloud->push_back(closest_3d_release);
-          CloudPtr release_cloud_orig = CommonTools::transform3d(release_cloud, transform.inverse());
-          PointT true_release = release_cloud_orig->at(0);
-
-          CloudPtr grip_cloud(new pcl::PointCloud<PointT>());
-          grip_cloud->push_back(closest_3d_grip);
-          CloudPtr grip_cloud_orig = CommonTools::transform3d(grip_cloud, transform.inverse());
-          PointT true_grip = grip_cloud_orig->at(0);
-
-          cout << "FOUND 3D point in original cloud: " << true_grip << " --> " << true_release << endl;
-          stringstream pub_ui_msg;
-          pub_ui_msg << true_grip.x << ","
-                     << true_grip.y << ","
-                     << true_grip.z << ","
-                     << true_release.x << ","
-                     << true_release.y << ","
-                     << true_release.z << endl;
-          std_msgs::String msg;
-          msg.data = pub_ui_msg.str();
-          m_pub_ui.publish(msg);
-
-          m_compute_fold = false;
-      }
 
       Mat aligned_mask = m_fluent_calc.get_mask_from_aligned_cloud(aligned_cloud->makeShared());
 
@@ -247,6 +172,8 @@ public:
           m_prev_fluent_vector = fluent_vector;
       }
       m_pcd_filename_idx++;
+
+      return fluent_vector;
   }
 
   void callback(const CloudConstPtr& cloud_const_ptr) {
@@ -272,7 +199,13 @@ public:
     table_midpoint.y = table_midpoint_y;
     table_midpoint.z = table_midpoint_z;
 
-    compute_fluents(cloud_const_ptr, table_normal, table_midpoint, vid_idx, img_idx);
+    // if video_idx changed, then restart the step_number counter
+    if (m_vid_idx != vid_idx) {
+      m_step_number = 1;
+    }
+    m_vid_idx = vid_idx;
+
+    vector<float> fluent_vec = compute_fluents(cloud_const_ptr, table_normal, table_midpoint, img_idx);
   }
 
 private:
