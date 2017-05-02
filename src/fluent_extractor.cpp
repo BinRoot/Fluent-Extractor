@@ -26,6 +26,7 @@ public:
     m_step_number = 1;
     m_pcd_filename_idx = 1;
     m_compute_fold = false;
+    m_prev_pixel2voxel = NULL;
 //    m_viz = new pcl::visualization::PCLVisualizer("CloudViewer");
   }
 
@@ -152,6 +153,7 @@ public:
     m_prev_cloud_ptr = CloudPtr(cloud_ptr);
 
       if (!m_prev_pixel2voxel) {
+          cout << "allocating space for pixel2voxel" << endl;
           m_prev_pixel2voxel = new int[img.size().area()];
       }
       std::memcpy(m_prev_pixel2voxel, pixel2voxel, sizeof(int) * img.size().area());
