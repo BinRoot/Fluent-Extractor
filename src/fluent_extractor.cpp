@@ -150,11 +150,11 @@ public:
 
     m_prev_mask = mask.clone();
     m_prev_cloud_ptr = CloudPtr(cloud_ptr);
-    if (m_prev_pixel2voxel != NULL) {
-        delete m_prev_pixel2voxel;
-    }
-    m_prev_pixel2voxel = new int[img.size().area()];
-    std::memcpy(m_prev_pixel2voxel, pixel2voxel, sizeof(int) * img.size().area());
+
+      if (!m_prev_pixel2voxel) {
+          m_prev_pixel2voxel = new int[img.size().area()];
+      }
+      std::memcpy(m_prev_pixel2voxel, pixel2voxel, sizeof(int) * img.size().area());
   }
 
   vector<float> compute_fluents(CloudConstPtr cloth_cloud, PointT table_normal, PointT table_midpoint) {
