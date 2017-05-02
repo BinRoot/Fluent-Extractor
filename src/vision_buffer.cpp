@@ -254,28 +254,9 @@ public:
       sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
       m_xdisplay_pub.publish(*msg);
 
-
       // save cloth_mask to file
 //      String path = ros::package::getPath("fluent_extractor") + "/cloth.png";
 //      imwrite(path, cloth_mask);
-
-//      CloudPtr cloth_cloud_ptr = CommonTools::get_pointcloud_from_mask(cloud_ptr, pixel2voxel, cloth_mask);
-//
-//      stringstream payload;
-//
-//      payload << m_vid_idx << " "
-//              << img_idx << " "
-//              << m_table_normal.x << " "
-//              << m_table_normal.y << " "
-//              << m_table_normal.z << " "
-//              << m_table_midpoint.x << " "
-//              << m_table_midpoint.y << " "
-//              << m_table_midpoint.z;
-//      cloth_cloud_ptr->header.frame_id = payload.str();
-
-//      cout << "publishing cloud of size " << cloth_cloud_ptr->size() << endl;
-//      m_pub.publish(cloth_cloud_ptr);
-
 
       fluent_extractor::ClothSegment cloth_segment;
       cloth_segment.vid_idx = m_vid_idx;

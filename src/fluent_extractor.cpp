@@ -6,6 +6,7 @@
 #include "ros/package.h"
 #include <fluent_extractor/ClothSegment.h>
 #include <cv_bridge/cv_bridge.h>
+#include <fluent_extractor/PgFragment.h>
 
 #include "CommonTools.h"
 #include "FluentCalc.h"
@@ -16,10 +17,12 @@ using namespace cv;
 
 class CloudAnalyzer {
 public:
-  CloudAnalyzer(ros::Publisher& pub, ros::Publisher& pub_ui) {
+  CloudAnalyzer(ros::Publisher& pub, ros::Publisher& pub_pg, ros::Publisher& pub_ui) {
     m_pub = pub;
+    m_pub_pg = pub_pg;
     m_pub_ui = pub_ui;
     m_outfile.open("train.dat", std::ios_base::app);
+    m_vid_idx = -1;
     m_step_number = 1;
     m_pcd_filename_idx = 1;
     m_compute_fold = false;
@@ -70,10 +73,36 @@ public:
     // if video_idx changed, then restart the step_number counter
     if (m_vid_idx != vid_idx) {
       m_step_number = 1;
+      m_prev_mask = Mat();
+      if (m_vid_idx >= 0) {
+          fluent_extractor::PgFragment pg_fragment;
+          stringstream pg_name;
+          pg_name << "pg_" << m_vid_idx;
+          pg_fragment.name = pg_name.str();
+          m_pub_pg.publish(pg_fragment);
+      }
     }
     m_vid_idx = vid_idx;
 
-    vector<float> fluent_vec = compute_fluents(cloth_cloud_ptr, table_normal, table_midpoint, img_idx);
+    vector<float> fluent_vector = compute_fluents(cloth_cloud_ptr, table_normal, table_midpoint);
+
+    float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
+    cout << "dist from prev fluent: " << dist << endl;
+    publish_fluent_vector(fluent_vector);
+    print_fluent_vector(fluent_vector);
+
+    if (true || dist > 1) {
+      cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
+      // SAVE  state_img, debug_img, fluent vector
+
+    //      Mat state_img = CommonTools::get_image_from_cloud(aligned_cloud, "yz");
+    //      save_fluent_data(state_img, debug_img, fluent_vector);
+
+      save_fluent_vector(fluent_vector, img_idx);
+      m_prev_fluent_vector = fluent_vector;
+    }
+    m_pcd_filename_idx++;
+
 
     if (m_prev_mask.size().area() > 0) {
         // compare mask with m_prev_mask
@@ -102,19 +131,33 @@ public:
         stringstream pcd_moved_filename;
         pcd_moved_filename << "cloth_moved_" << vid_idx << "_" << img_idx << ".pcd";
         pcl::io::savePCDFile(pcd_moved_filename.str(), *cloth_moved_cloud);
+        vector<float> pcd_moved_fluent_vector = compute_fluents(cloth_moved_cloud, table_normal, table_midpoint);
+
         stringstream pcd_remained_filename;
         pcd_remained_filename << "cloth_remained_" << vid_idx << "_" << img_idx << ".pcd";
         pcl::io::savePCDFile(pcd_remained_filename.str(), *cloth_remained_cloud);
+        vector<float> pcd_remained_fluent_vector = compute_fluents(cloth_remained_cloud, table_normal, table_midpoint);
+
+        fluent_extractor::PgFragment pg_fragment;
+        stringstream pg_name;
+        pg_name << "pg_" << m_vid_idx;
+        pg_fragment.name = pg_name.str();
+        pg_fragment.a = fluent_vector;
+        pg_fragment.b = pcd_moved_fluent_vector;
+        pg_fragment.c = pcd_remained_fluent_vector;
+        m_pub_pg.publish(pg_fragment);
     }
 
     m_prev_mask = mask.clone();
     m_prev_cloud_ptr = CloudPtr(cloud_ptr);
-    delete m_prev_pixel2voxel;
+    if (m_prev_pixel2voxel != NULL) {
+        delete m_prev_pixel2voxel;
+    }
     m_prev_pixel2voxel = new int[img.size().area()];
     std::memcpy(m_prev_pixel2voxel, pixel2voxel, sizeof(int) * img.size().area());
   }
 
-  vector<float> compute_fluents(CloudConstPtr cloth_cloud, PointT table_normal, PointT table_midpoint, int img_idx) {
+  vector<float> compute_fluents(CloudConstPtr cloth_cloud, PointT table_normal, PointT table_midpoint) {
       std::vector<float> fluent_vector;
 
       Eigen::Matrix4f transform = CommonTools::get_projection_transform(cloth_cloud->makeShared());
@@ -154,59 +197,9 @@ public:
       vector<float> squareness_fluents = m_fluent_calc.calc_squareness(aligned_mask);
       fluent_vector.insert(fluent_vector.end(), squareness_fluents.begin(), squareness_fluents.end());
 
-      float dist = compute_fluent_dist(fluent_vector, m_prev_fluent_vector);
-      cout << "dist from prev fluent: " << dist << endl;
-      publish_fluent_vector(fluent_vector);
-      print_fluent_vector(fluent_vector);
-
-      if (true || dist > 1) {
-          cout << "STATE DETECTED: " << m_pcd_filename_idx << endl;
-          // SAVE  state_img, debug_img, fluent vector
-
-//      Mat state_img = CommonTools::get_image_from_cloud(aligned_cloud, "yz");
-//      save_fluent_data(state_img, debug_img, fluent_vector);
-
-          save_fluent_vector(fluent_vector, img_idx);
-          print_fluent_vector(fluent_vector);
-
-          m_prev_fluent_vector = fluent_vector;
-      }
-      m_pcd_filename_idx++;
-
       return fluent_vector;
   }
 
-  void callback(const CloudConstPtr& cloud_const_ptr) {
-    cout << "cloud size: " << cloud_const_ptr->size() << endl;
-
-    if (cloud_const_ptr->size() < 100) {
-      return;
-    }
-
-    // Get the table normal and vid_idx, which is saved in the header
-    string payload = cloud_const_ptr->header.frame_id;
-    int vid_idx, img_idx;
-    float table_normal_x, table_normal_y, table_normal_z;
-    float table_midpoint_x, table_midpoint_y, table_midpoint_z;
-    sscanf(payload.c_str(), "%d %d %f %f %f %f %f %f", &vid_idx, &img_idx,
-         &table_normal_x, &table_normal_y, &table_normal_z,
-         &table_midpoint_x, &table_midpoint_y, &table_midpoint_z);
-    PointT table_normal, table_midpoint;
-    table_normal.x = table_normal_x;
-    table_normal.y = table_normal_y;
-    table_normal.z = table_normal_z;
-    table_midpoint.x = table_midpoint_x;
-    table_midpoint.y = table_midpoint_y;
-    table_midpoint.z = table_midpoint_z;
-
-    // if video_idx changed, then restart the step_number counter
-    if (m_vid_idx != vid_idx) {
-      m_step_number = 1;
-    }
-    m_vid_idx = vid_idx;
-
-    vector<float> fluent_vec = compute_fluents(cloud_const_ptr, table_normal, table_midpoint, img_idx);
-  }
 
 private:
   FluentCalc m_fluent_calc;
@@ -217,6 +210,7 @@ private:
   int m_pcd_filename_idx;
   ros::Publisher m_pub;
   ros::Publisher m_pub_ui;
+  ros::Publisher m_pub_pg;
   pcl::visualization::PCLVisualizer *m_viz;
   cv::Point2f m_grip;
   cv::Point2f m_release;
@@ -297,20 +291,13 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "fluent_extractor");
 
   ros::NodeHandle node_handle;
-  ros::Publisher pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/fluent_vector", 1);
-  ros::Publisher pub_ui = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/grip_release", 1);
+  ros::Publisher pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/fluent_vector", 1000);
+  ros::Publisher pub_ui = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/grip_release", 1000);
+  ros::Publisher pub_pg = node_handle.advertise<fluent_extractor::PgFragment>("/aog_engine/pg_fragment", 1000);
 
-  CloudAnalyzer cloud_analyzer(pub, pub_ui);
-
-  ros::Subscriber sub = node_handle.subscribe<Cloud>("/vcla/cloth_folding/vision_buffer_pcl", 1, &CloudAnalyzer::callback, &cloud_analyzer);
-
-  ros::Subscriber sub2 = node_handle.subscribe("/vcla/cloth_folding/hoi_action", 1, &CloudAnalyzer::callback_hoi, &cloud_analyzer);
-
-  ros::Subscriber sub_cloth_segment = node_handle.subscribe("/vcla/cloth_folding/cloth_segment", 1, &CloudAnalyzer::callback_cloth_segment, &cloud_analyzer);
-
-
-  // outfile << step_number++ << " qid:" << json["vid_idx"].GetInt() << " 1:" << cloth_feature[0] << " 2:" << cloth_feature[1] << endl;
-
+  CloudAnalyzer cloud_analyzer(pub, pub_pg, pub_ui);
+  ros::Subscriber sub2 = node_handle.subscribe("/vcla/cloth_folding/hoi_action", 1000, &CloudAnalyzer::callback_hoi, &cloud_analyzer);
+  ros::Subscriber sub_cloth_segment = node_handle.subscribe("/vcla/cloth_folding/cloth_segment", 1000, &CloudAnalyzer::callback_cloth_segment, &cloud_analyzer);
 
   ros::spin();
 
