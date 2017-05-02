@@ -143,10 +143,32 @@ public:
         stringstream pg_name;
         pg_name << "pg_" << m_vid_idx;
         pg_fragment.name = pg_name.str();
-        pg_fragment.a = fluent_vector;
+
+        sensor_msgs::ImagePtr ros_img_a;
+        if (m_prev_pcd_remained_fluent_vector.size() == 0) {
+            pg_fragment.a = fluent_vector;
+            ros_img_a = cv_bridge::CvImage(std_msgs::Header(), "mono8", mask).toImageMsg();
+        } else {
+            pg_fragment.a = m_prev_pcd_remained_fluent_vector;
+            ros_img_a = cv_bridge::CvImage(std_msgs::Header(), "mono8", m_prev_mask).toImageMsg();
+        }
+        pg_fragment.a_icon = *ros_img_a;
+
         pg_fragment.b = pcd_moved_fluent_vector;
         pg_fragment.c = pcd_remained_fluent_vector;
+
+        Mat mask_b = m_fluent_calc.get_mask_from_aligned_cloud(cloth_moved_cloud->makeShared());
+        Mat mask_c = m_fluent_calc.get_mask_from_aligned_cloud(cloth_remained_cloud->makeShared());
+
+        sensor_msgs::ImagePtr ros_img_b = cv_bridge::CvImage(std_msgs::Header(), "mono8", mask_b).toImageMsg();
+        sensor_msgs::ImagePtr ros_img_c = cv_bridge::CvImage(std_msgs::Header(), "mono8", mask_c).toImageMsg();
+
+        pg_fragment.b_icon = *ros_img_b;
+        pg_fragment.c_icon = *ros_img_c;
+
         m_pub_pg.publish(pg_fragment);
+
+        m_prev_pcd_remained_fluent_vector = pcd_remained_fluent_vector;
     }
 
     m_prev_mask = mask.clone();
@@ -220,6 +242,7 @@ private:
   Mat m_prev_mask;
   CloudPtr m_prev_cloud_ptr;
   int* m_prev_pixel2voxel;
+  vector<float> m_prev_pcd_remained_fluent_vector;
   
   void print_fluent_vector(std::vector<float> fluent_vector) {
     for (int i = 0; i < fluent_vector.size(); i++) {
