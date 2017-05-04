@@ -1,7 +1,7 @@
 {
     "vids_directory": "/home/binroot/res/cloth_folding_vids/",
     "vid_idx": 1,
-    "vid_idx_start": 20,
+    "vid_idx_start": 1,
     "vid_idx_end": 45,
     "start_frame_idx": 0,
     "use_kinect": false,

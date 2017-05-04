@@ -309,6 +309,21 @@ private:
 };
 
 
+map<int, string> load_idx_to_lang_map(string lang_filename) {
+    map<int, string> idx_to_lang;
+    std::ifstream input(lang_filename);
+    for(string line; getline(input, line); ) {
+        cout << "line: " << line << endl;
+        if (line.size() <= 1) continue;
+        vector<string> strs;
+        boost::split(strs, line, boost::is_any_of("\t"));
+        int img_idx = stoi(strs[0]);
+        idx_to_lang[img_idx] = strs[1];
+    }
+    return idx_to_lang;
+}
+
+
 int main(int argc, char **argv) {
   ros::init(argc, argv, "vision_buffer");
   ros::NodeHandle node_handle;
@@ -326,6 +341,8 @@ int main(int argc, char **argv) {
   ros::Publisher xdisplay_pub = node_handle.advertise<sensor_msgs::Image>("/vcla/cloth_folding/vision_buffer", 1);
   ros::Publisher cloth_keypoints_pub = node_handle.advertise<std_msgs::String>("/vcla/cloth_folding/keypoints", 1);
   ros::Publisher pub_cloth_segment = node_handle.advertise<fluent_extractor::ClothSegment>("/vcla/cloth_folding/cloth_segment", 1);
+
+  ros::Publisher pub_lang = node_handle.advertise<std_msgs::String>("/aog_engine/natural_language", 1000);
 
 
   if (json["use_kinect"].GetBool()) {
@@ -362,12 +379,21 @@ int main(int argc, char **argv) {
       vids_directory << vid_idx << "/";
       FileFrameScanner scanner(vids_directory.str());
 
+      string lang_filename = vids_directory.str() + "language.csv";
+      map<int, string> idx_to_lang = load_idx_to_lang_map(lang_filename);
+
       Mat img_bgr, x, y, z;
       PointT left_hand, right_hand;
       int img_idx = json["start_frame_idx"].GetInt();
 
       while(scanner.get(img_idx++, img_bgr, x, y, z, left_hand, right_hand)) {
         if (!ros::ok()) break;
+        if (idx_to_lang.count(img_idx)) {
+            std_msgs::String msg_lang;
+            msg_lang.data = idx_to_lang[img_idx];
+            cout << "natural_language publishing: " << idx_to_lang[img_idx] << endl;
+            pub_lang.publish(msg_lang);
+        }
         int pixel2voxel[img_bgr.size().area()];
         int voxel2pixel[img_bgr.size().area()];
         CloudPtr cloud_ptr = CommonTools::make_cloud_ptr(img_bgr, x, y, z, pixel2voxel, voxel2pixel);
