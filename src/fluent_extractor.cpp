@@ -15,6 +15,8 @@
 using namespace std;
 using namespace cv;
 
+const float ICON_SCALE = 0.1;
+
 class CloudAnalyzer {
 public:
   CloudAnalyzer(ros::Publisher& pub, ros::Publisher& pub_pg, ros::Publisher& pub_ui) {
@@ -144,15 +146,14 @@ public:
         pg_name << "pg_" << m_vid_idx;
         pg_fragment.name = pg_name.str();
 
-        sensor_msgs::ImagePtr ros_img_a;
         if (m_prev_pcd_remained_fluent_vector.size() == 0) {
             pg_fragment.a = fluent_vector;
-            ros_img_a = cv_bridge::CvImage(std_msgs::Header(), "mono8", mask).toImageMsg();
+            Mat prev_mask_small; cv::resize(m_prev_mask, prev_mask_small, Size(), ICON_SCALE, ICON_SCALE);
+            sensor_msgs::ImagePtr ros_img_a = cv_bridge::CvImage(std_msgs::Header(), "mono8", prev_mask_small).toImageMsg();
+            pg_fragment.a_icon = *ros_img_a;
         } else {
             pg_fragment.a = m_prev_pcd_remained_fluent_vector;
-            ros_img_a = cv_bridge::CvImage(std_msgs::Header(), "mono8", m_prev_mask).toImageMsg();
         }
-        pg_fragment.a_icon = *ros_img_a;
 
         pg_fragment.b = pcd_moved_fluent_vector;
         pg_fragment.c = pcd_remained_fluent_vector;
@@ -160,8 +161,10 @@ public:
         Mat mask_b = m_fluent_calc.get_mask_from_aligned_cloud(cloth_moved_cloud->makeShared());
         Mat mask_c = m_fluent_calc.get_mask_from_aligned_cloud(cloth_remained_cloud->makeShared());
 
-        sensor_msgs::ImagePtr ros_img_b = cv_bridge::CvImage(std_msgs::Header(), "mono8", mask_b).toImageMsg();
-        sensor_msgs::ImagePtr ros_img_c = cv_bridge::CvImage(std_msgs::Header(), "mono8", mask_c).toImageMsg();
+        Mat child_moved_mask_small; resize(child_moved_mask, child_moved_mask_small, Size(), ICON_SCALE, ICON_SCALE);
+        Mat child_remained_mask_small; resize(child_remained_mask, child_remained_mask_small, Size(), ICON_SCALE, ICON_SCALE);
+        sensor_msgs::ImagePtr ros_img_b = cv_bridge::CvImage(std_msgs::Header(), "mono8", child_moved_mask_small).toImageMsg();
+        sensor_msgs::ImagePtr ros_img_c = cv_bridge::CvImage(std_msgs::Header(), "mono8", child_remained_mask_small).toImageMsg();
 
         pg_fragment.b_icon = *ros_img_b;
         pg_fragment.c_icon = *ros_img_c;
