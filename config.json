@@ -2,7 +2,7 @@
     "vids_directory": "/home/binroot/res/cloth_folding_vids/",
     "vid_idx": 1,
     "vid_idx_start": 1,
-    "vid_idx_end": 45,
+    "vid_idx_end": 20,
     "start_frame_idx": 0,
     "use_kinect": false,
     "kinect_topic": "/kinect2/sd/points",

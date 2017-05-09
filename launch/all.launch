@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="fluent_extractor" type="vision_buffer" name="vision_buffer"
+          output="screen" args="/home/binroot/ros_ws/src/fluent_extractor/config.json" />
+    <node pkg="fluent_extractor" type="fluent_extractor" name="fluent_extractor"
+          output="screen" launch-prefix="gnome-terminal --geometry=80x20+200+600 --window-with-profile=ROS -e" />
+</launch>

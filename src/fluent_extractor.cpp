@@ -23,7 +23,8 @@ public:
     m_pub = pub;
     m_pub_pg = pub_pg;
     m_pub_ui = pub_ui;
-    m_outfile.open("train.dat", std::ios_base::app);
+    string train_filename = ros::package::getPath("fluent_extractor") + "/train.dat";
+    m_outfile.open(train_filename, std::ios_base::app);
     m_vid_idx = -1;
     m_step_number = 1;
     m_pcd_filename_idx = 1;
@@ -84,6 +85,7 @@ public:
           pg_fragment.name = pg_name.str();
           m_pub_pg.publish(pg_fragment);
       }
+      m_prev_pcd_remained_fluent_vector.clear();
     }
     m_vid_idx = vid_idx;
 
@@ -133,12 +135,12 @@ public:
 
         stringstream pcd_moved_filename;
         pcd_moved_filename << "cloth_moved_" << vid_idx << "_" << img_idx << ".pcd";
-        pcl::io::savePCDFile(pcd_moved_filename.str(), *cloth_moved_cloud);
+//        pcl::io::savePCDFile(pcd_moved_filename.str(), *cloth_moved_cloud);
         vector<float> pcd_moved_fluent_vector = compute_fluents(cloth_moved_cloud, table_normal, table_midpoint);
 
         stringstream pcd_remained_filename;
         pcd_remained_filename << "cloth_remained_" << vid_idx << "_" << img_idx << ".pcd";
-        pcl::io::savePCDFile(pcd_remained_filename.str(), *cloth_remained_cloud);
+//        pcl::io::savePCDFile(pcd_remained_filename.str(), *cloth_remained_cloud);
         vector<float> pcd_remained_fluent_vector = compute_fluents(cloth_remained_cloud, table_normal, table_midpoint);
 
         fluent_extractor::PgFragment pg_fragment;

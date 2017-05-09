@@ -38,6 +38,7 @@ public:
     m_keypoints_pub = keypoints_pub;
     m_pub = pub;
     m_pub_cloth_segment = pub_cloth_segment;
+    m_frames_since_obstacle = 0;
   }
 
   void process(CloudPtr cloud_ptr, Mat img_bgr, int* pixel2voxel, int* voxel2pixel, int img_idx=-1) {
@@ -85,9 +86,11 @@ public:
         sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", xdisplay_img).toImageMsg();
         m_xdisplay_pub.publish(*msg);
         waitKey(100);
+        m_frames_since_obstacle = 0;
         return;
       } else {
         cout << "no obstacle" << endl;
+        m_frames_since_obstacle++;
       }
 
 
@@ -244,8 +247,8 @@ public:
       circle(cloth_mask_col, right_p2d, 15, Scalar(90, 128, 220), 4);
       imshow("cloth", cloth_mask_col);
       imshow("original img", img_bgr);
-      char c = waitKey(0);
-      if (c != ' ') {
+      char c = waitKey(100);
+      if (m_frames_since_obstacle != 3 /* c != ' ' */) {
           // only publish pcl data if spacebar
           return;
       }
@@ -306,6 +309,7 @@ private:
   PointT m_table_midpoint, m_table_normal;
   Seg2D m_seg2D;
   vector<double> m_cloth_feature;
+  int m_frames_since_obstacle;
 };
 
 
