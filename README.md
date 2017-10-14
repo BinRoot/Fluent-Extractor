@@ -1,10 +1,22 @@
-# Info
+# Intro
+
+This is the official repository for the paper *Learning Human Utility from Video Demonstrations for Deductive Planning in Robotics* (CoRL 2017). We are cleaning up the code and documentation. Please stay tuned.
+
+If you use this code, please cite:
+
+    @inproceedings{shukla17,
+      title={Learning Human Utility from Video Demonstrations for Deductive Planning in Robotics},
+      author={Shukla, Nishant and He, Yunzhong and Chen, Frank and Zhu, Song-Chun},
+      booktitle={The Conference on Robot Learning (CoRL)},
+      year={2017}
+    }
+
+# Overview of system
 
 There are 2 nodes: 
 
 1. `fluent_extractor`: Subscribes to `vision_buffer_pcl` and extracts pointcloud features
 2. `vision_buffer`: Publishes cloth pointcloud to `vision_buffer_pcl` 
-
 
 # Setup
 
@@ -32,6 +44,4 @@ There are 2 nodes:
 6. Run the `vision_buffer`
 
         $ rosrun fluent_extractor vision_buffer src/fluent_extractor/config.json
-        
-
         
